@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\fingerprintmiddleware\\fingerprintMiddleware.csproj": {}
+    "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\fingerprintMiddleware\\fingerprintMiddleware.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\fingerprintmiddleware\\fingerprintMiddleware.csproj": {
+    "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\fingerprintMiddleware\\fingerprintMiddleware.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\fingerprintmiddleware\\fingerprintMiddleware.csproj",
+        "projectUniqueName": "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\fingerprintMiddleware\\fingerprintMiddleware.csproj",
         "projectName": "fingerprintMiddleware",
-        "projectPath": "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\fingerprintmiddleware\\fingerprintMiddleware.csproj",
+        "projectPath": "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\fingerprintMiddleware\\fingerprintMiddleware.csproj",
         "packagesPath": "C:\\Users\\Souchan\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\fingerprintmiddleware\\obj\\",
+        "outputPath": "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\fingerprintMiddleware\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\Souchan\\AppData\\Roaming\\NuGet\\NuGet.Config"

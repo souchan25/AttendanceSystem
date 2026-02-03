@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("fingerprintMiddleware")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+dd0bef6bab77a64f3e8aafaf332afaa7126a5454")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+085b0f3b94ae6e265da2a6c5c415236d6dbf5b0e")]
 [assembly: System.Reflection.AssemblyProductAttribute("fingerprintMiddleware")]
 [assembly: System.Reflection.AssemblyTitleAttribute("fingerprintMiddleware")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

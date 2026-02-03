@@ -20,6 +20,9 @@
             <p class="subtitle">@currentEvent?.EventName (@currentEvent?.Period - @currentEvent?.AcademicYear)</p>
         </div>
         <div class="header-right">
+            <button class="btn btn-reinit" @onclick="HandleReinitialize" title="Reinitialize Scanner">
+                <span class="icon">🔄</span> RESET
+            </button>
             @if (identifiedStudent != null && showRecordsOption)
             {
                 <button class="btn btn-my-records" @onclick='() => Navigation.NavigateTo("/myrecords")'>
@@ -152,6 +155,17 @@
     .btn-back:hover {
         background: rgba(255, 255, 255, 0.25);
         transform: translateX(-3px);
+    }
+
+    .btn-reinit {
+        background: rgba(255, 255, 255, 0.15);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        margin-right: var(--space-2);
+    }
+
+    .btn-reinit:hover {
+        background: rgba(255, 255, 255, 0.25);
     }
 
     .btn-my-records {
@@ -495,6 +509,41 @@
     private async Task CheckConnection()
     {
         scannerConnected = await ApiClient.CheckConnectionAsync();
+    }
+
+    private async Task HandleReinitialize()
+    {
+        isScanning = true;
+        statusMessage = "INITIALIZING...";
+        statusHint = "Resetting fingerprint scanner...";
+        StateHasChanged();
+
+        var result = await ApiClient.ReinitializeAsync();
+        
+        if (result.Success)
+        {
+            await CheckConnection();
+            statusMessage = "SCANNER READY";
+            statusHint = "Successfully reinitialized";
+        }
+        else
+        {
+            statusMessage = "ERROR";
+            statusHint = result.Message ?? result.Error ?? "Initialization failed";
+            scannerConnected = false;
+        }
+
+        isScanning = false;
+        StateHasChanged();
+
+        // If success, revert to default message after delay
+        if (result.Success)
+        {
+            await Task.Delay(2000);
+            statusMessage = "PLACE YOUR FINGER ON THE SCANNER";
+            statusHint = "Ready to scan fingerprint...";
+            StateHasChanged();
+        }
     }
 
     private async Task LoadCurrentEvent()

@@ -162,9 +162,12 @@ else
             <div class="tab-content">
                 <div class="section-header">
                     <h2>Student Management</h2>
-                    <div class="search-box">
-                        <input type="text" @bind="studentSearch" @bind:after="FilterStudents" 
-                               placeholder="Search students..." class="form-control" />
+                    <div class="header-actions">
+                        <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/enroll")'>+ Enroll Student</button>
+                        <div class="search-box">
+                            <input type="text" @bind="studentSearch" @bind:after="FilterStudents" 
+                                   placeholder="Search students..." class="form-control" />
+                        </div>
                     </div>
                 </div>
 
@@ -469,6 +472,17 @@ else
         color: var(--neutral-900);
         font-size: 1.25rem;
         font-weight: 600;
+        margin: 0;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: var(--space-3);
+        align-items: center;
+    }
+
+    .search-box {
+        min-width: 250px;
     }
 
     .btn-cancel {

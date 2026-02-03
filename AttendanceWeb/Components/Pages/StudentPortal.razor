@@ -3,6 +3,7 @@
 @using AttendanceWeb.Models
 @using AttendanceWeb.Services
 @inject AttendanceDatabase Database
+@inject FingerprintApiClient ApiClient
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
 
@@ -10,6 +11,16 @@
 
 <div class="portal-container">
     <div class="portal-header">
+        <div class="header-controls">
+            <button class="btn btn-reinit" @onclick="HandleReinitialize" disabled="@isInitializing">
+                <span class="icon">@((isInitializing) ? "⏳" : "🔄")</span> 
+                @((isInitializing) ? "RESETTING..." : "RESET SCANNER")
+            </button>
+            @if (!string.IsNullOrEmpty(statusMessage))
+            {
+                <span class="status-msg">@statusMessage</span>
+            }
+        </div>
         <h1 class="portal-title">🎓 Student Attendance Portal</h1>
         <p class="portal-subtitle">Select an event to check your attendance</p>
     </div>
@@ -119,6 +130,49 @@
 
 <style>
     .portal-container {
+        position: relative;
+    }
+
+    .header-controls {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+    }
+
+    .status-msg {
+        background: rgba(0, 0, 0, 0.6);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+    }
+
+    .btn-reinit {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        padding: 8px 16px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s;
+        backdrop-filter: blur(5px);
+    }
+
+    .btn-reinit:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.3);
+        transform: translateY(-1px);
+    }
+
+    .btn-reinit:disabled {
+        opacity: 0.7;
+        cursor: wait;
         min-height: 100vh;
         background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-800) 100%);
         padding: var(--space-6);
@@ -409,10 +463,37 @@
 @code {
     private List<Event> activeEvents = new();
     private bool isLoading = true;
+    private bool isInitializing = false;
+    private string statusMessage = "";
 
     protected override async Task OnInitializedAsync()
     {
         await LoadActiveEvents();
+    }
+
+    private async Task HandleReinitialize()
+    {
+        isInitializing = true;
+        statusMessage = "Initializing...";
+        StateHasChanged();
+
+        var result = await ApiClient.ReinitializeAsync();
+        
+        if (result.Success)
+        {
+            statusMessage = "Scanner Ready!";
+        }
+        else
+        {
+            statusMessage = "Failed: " + (result.Message ?? result.Error);
+        }
+
+        isInitializing = false;
+        StateHasChanged();
+
+        await Task.Delay(3000);
+        statusMessage = "";
+        StateHasChanged();
     }
 
     private async Task LoadActiveEvents()

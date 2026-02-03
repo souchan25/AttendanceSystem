@@ -86,7 +86,23 @@ namespace AttendanceWeb.Services
             }
         }
 
+        public async Task<FingerprintResponse> ReinitializeAsync()
+        {
+            try
+            {
+                var response = await _httpClient.PostAsync($"{_baseUrl}/api/fingerprint/reinitialize", null);
+                var content = await response.Content.ReadAsStringAsync();
+                return JsonConvert.DeserializeObject<FingerprintResponse>(content)
+                    ?? new FingerprintResponse { Success = false, Message = "Failed to parse response" };
+            }
+            catch (Exception ex)
+            {
+                return new FingerprintResponse { Success = false, Error = ex.Message };
+            }
+        }
+
         public async Task<FingerprintResponse> CompareTemplatesAsync(string template1, string template2)
+
         {
             try
             {
