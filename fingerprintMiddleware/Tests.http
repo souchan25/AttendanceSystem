@@ -1,0 +1,33 @@
+@host = https://localhost:5001
+
+### Get device information
+GET {{host}}/api/fingerprint/device-info
+Accept: application/json
+
+### Get reader status
+GET {{host}}/api/fingerprint/status
+Accept: application/json
+
+### Capture a fingerprint
+POST {{host}}/api/fingerprint/capture
+Content-Type: application/json
+
+### Enroll a fingerprint
+POST {{host}}/api/fingerprint/enroll
+Content-Type: application/json
+
+{
+  "userId": "user123"
+}
+
+### Verify a fingerprint
+POST {{host}}/api/fingerprint/verify
+Content-Type: application/json
+
+{
+  "template": "your_base64_template_here"
+}
+
+### Reinitialize the reader
+POST {{host}}/api/fingerprint/reinitialize
+Content-Type: application/json

@@ -1,0 +1,438 @@
+@page "/"
+@page "/student"
+@using AttendanceWeb.Models
+@using AttendanceWeb.Services
+@inject AttendanceDatabase Database
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Student Portal</PageTitle>
+
+<div class="portal-container">
+    <div class="portal-header">
+        <h1 class="portal-title">🎓 Student Attendance Portal</h1>
+        <p class="portal-subtitle">Select an event to check your attendance</p>
+    </div>
+
+    <div class="event-selection-card">
+        <h2>Active Events</h2>
+        
+        @if (isLoading)
+        {
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Loading events...</p>
+            </div>
+        }
+        else if (activeEvents.Count == 0)
+        {
+            <div class="empty-state">
+                <div class="empty-icon">📅</div>
+                <h3>No Active Events</h3>
+                <p>There are no events available for attendance at the moment.</p>
+                <p class="hint">Please check back later or contact your administrator.</p>
+            </div>
+        }
+        else
+        {
+            <div class="events-grid">
+                @foreach (var evt in activeEvents)
+                {
+                    <div class="event-card" @onclick="() => SelectEvent(evt)">
+                        <div class="event-header">
+                            <div class="event-icon">📅</div>
+                            <div class="event-status">
+                                <span class="status-dot active"></span>
+                                Active
+                            </div>
+                        </div>
+                        
+                        <div class="event-content">
+                            <h3>@evt.EventName</h3>
+                            <p class="event-details">
+                                <span class="detail-item">
+                                    <span class="icon">📖</span>
+                                    @evt.Period
+                                </span>
+                                <span class="detail-item">
+                                    <span class="icon">📆</span>
+                                    @evt.AcademicYear
+                                </span>
+                            </p>
+                            <p class="event-date">
+                                <span class="icon">🗓️</span>
+                                @evt.EventDate.ToString("MMMM dd, yyyy")
+                            </p>
+                            
+                            @if (!string.IsNullOrEmpty(evt.Description))
+                            {
+                                <p class="event-description">@evt.Description</p>
+                            }
+
+                            @if (!string.IsNullOrEmpty(evt.TimeInStart) || !string.IsNullOrEmpty(evt.TimeOutStart))
+                            {
+                                <div class="time-info">
+                                    @if (!string.IsNullOrEmpty(evt.TimeInStart))
+                                    {
+                                        <div class="time-slot">
+                                            <span class="time-label">⬇️ Time In:</span>
+                                            <span class="time-range">@evt.TimeInStart - @evt.TimeInEnd</span>
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(evt.TimeOutStart))
+                                    {
+                                        <div class="time-slot">
+                                            <span class="time-label">⬆️ Time Out:</span>
+                                            <span class="time-range">@evt.TimeOutStart - @evt.TimeOutEnd</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        
+                        <div class="event-footer">
+                            <button class="btn-select">
+                                Select Event →
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="info-section">
+        <div class="info-card">
+            <div class="info-icon">👆</div>
+            <div class="info-content">
+                <h4>How to Check Attendance</h4>
+                <ol>
+                    <li>Select the event you want to attend</li>
+                    <li>Place your finger on the scanner when prompted</li>
+                    <li>Your attendance will be recorded automatically</li>
+                    <li>You can view your records after checking in</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .portal-container {
+        min-height: 100vh;
+        background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-800) 100%);
+        padding: var(--space-6);
+    }
+
+    .portal-header {
+        text-align: center;
+        color: white;
+        margin-bottom: var(--space-8);
+        padding: var(--space-6);
+    }
+
+    .portal-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: var(--space-3);
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .portal-subtitle {
+        font-size: 1.25rem;
+        opacity: 0.95;
+    }
+
+    .event-selection-card {
+        background: white;
+        border-radius: var(--radius-xl);
+        padding: var(--space-6);
+        max-width: 1200px;
+        margin: 0 auto var(--space-6) auto;
+        box-shadow: var(--shadow-xl);
+    }
+
+    .event-selection-card h2 {
+        color: var(--primary-700);
+        margin-bottom: var(--space-6);
+        font-size: 1.75rem;
+        text-align: center;
+    }
+
+    .loading, .empty-state {
+        text-align: center;
+        padding: var(--space-8);
+        color: var(--gray-600);
+    }
+
+    .spinner {
+        width: 50px;
+        height: 50px;
+        border: 4px solid var(--gray-200);
+        border-top-color: var(--primary-600);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto var(--space-4);
+    }
+
+    .empty-icon {
+        font-size: 4rem;
+        margin-bottom: var(--space-4);
+    }
+
+    .empty-state h3 {
+        color: var(--gray-800);
+        margin-bottom: var(--space-3);
+    }
+
+    .empty-state .hint {
+        color: var(--gray-500);
+        font-size: 0.875rem;
+        margin-top: var(--space-2);
+    }
+
+    .events-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: var(--space-5);
+    }
+
+    .event-card {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border: 2px solid var(--gray-200);
+        border-radius: var(--radius-lg);
+        padding: var(--space-5);
+        cursor: pointer;
+        transition: all var(--transition-base);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+    }
+
+    .event-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-lg);
+        border-color: var(--primary-400);
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    }
+
+    .event-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .event-icon {
+        font-size: 2rem;
+    }
+
+    .event-status {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        font-size: 0.875rem;
+        color: var(--success-600);
+        font-weight: 600;
+    }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--success-500);
+        animation: pulse 2s ease-in-out infinite;
+    }
+
+    @@keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .event-content h3 {
+        color: var(--gray-900);
+        font-size: 1.375rem;
+        font-weight: 700;
+        margin-bottom: var(--space-2);
+    }
+
+    .event-details {
+        display: flex;
+        gap: var(--space-4);
+        margin-bottom: var(--space-2);
+        flex-wrap: wrap;
+    }
+
+    .detail-item {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        color: var(--gray-600);
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    .event-date {
+        color: var(--primary-600);
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        margin-bottom: var(--space-3);
+    }
+
+    .event-description {
+        color: var(--gray-600);
+        font-size: 0.875rem;
+        line-height: 1.5;
+        margin-bottom: var(--space-3);
+    }
+
+    .time-info {
+        background: rgba(59, 130, 246, 0.1);
+        border-radius: var(--radius-md);
+        padding: var(--space-3);
+        margin-top: var(--space-3);
+    }
+
+    .time-slot {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--space-2) 0;
+        font-size: 0.875rem;
+    }
+
+    .time-label {
+        color: var(--gray-700);
+        font-weight: 600;
+    }
+
+    .time-range {
+        color: var(--primary-700);
+        font-weight: 600;
+    }
+
+    .event-footer {
+        margin-top: auto;
+        padding-top: var(--space-4);
+        border-top: 1px solid var(--gray-200);
+    }
+
+    .btn-select {
+        width: 100%;
+        padding: var(--space-3) var(--space-4);
+        background: var(--primary-600);
+        color: white;
+        border: none;
+        border-radius: var(--radius-md);
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: all var(--transition-base);
+    }
+
+    .btn-select:hover {
+        background: var(--primary-700);
+    }
+
+    .info-section {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .info-card {
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: var(--radius-lg);
+        padding: var(--space-5);
+        display: flex;
+        gap: var(--space-4);
+        align-items: start;
+    }
+
+    .info-icon {
+        font-size: 3rem;
+        flex-shrink: 0;
+    }
+
+    .info-content h4 {
+        color: var(--primary-700);
+        margin-bottom: var(--space-3);
+        font-size: 1.25rem;
+    }
+
+    .info-content ol {
+        color: var(--gray-700);
+        line-height: 1.8;
+        padding-left: var(--space-5);
+    }
+
+    .info-content li {
+        margin-bottom: var(--space-2);
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    @@media (max-width: 768px) {
+        .portal-container {
+            padding: var(--space-4);
+        }
+
+        .portal-title {
+            font-size: 1.75rem;
+        }
+
+        .portal-subtitle {
+            font-size: 1rem;
+        }
+
+        .events-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .event-selection-card {
+            padding: var(--space-4);
+        }
+
+        .info-card {
+            flex-direction: column;
+            text-align: center;
+        }
+
+        .info-content ol {
+            text-align: left;
+        }
+    }
+</style>
+
+@code {
+    private List<Event> activeEvents = new();
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadActiveEvents();
+    }
+
+    private async Task LoadActiveEvents()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        await Task.Delay(100); // Small delay for smooth UI
+
+        activeEvents = Database.GetAllEvents()
+            .Where(e => e.IsActive)
+            .OrderByDescending(e => e.EventDate)
+            .ToList();
+
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private void SelectEvent(Event evt)
+    {
+        Navigation.NavigateTo($"/attendance?eventId={evt.Id}");
+    }
+}

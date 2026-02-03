@@ -1,0 +1,422 @@
+@page "/admin/register"
+@using AttendanceWeb.Models
+@using AttendanceWeb.Services
+@inject AttendanceDatabase Database
+@inject FingerprintApiClient ApiClient
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Admin Registration</PageTitle>
+
+<div class="register-container">
+    <div class="register-card">
+        <div class="register-header">
+            <h1>👤 Admin Registration</h1>
+            <p>Register your fingerprint as an administrator</p>
+        </div>
+
+        @if (existingAdmins > 0 && !showExistingWarning)
+        {
+            <div class="alert alert-info">
+                ℹ️ There are already @existingAdmins admin(s) registered. Continue only if you need to add another admin.
+            </div>
+            <button class="btn btn-secondary" @onclick='() => showExistingWarning = true'>
+                Continue Registration
+            </button>
+            <button class="btn btn-link" @onclick='() => Navigation.NavigateTo("/admin/login")'>
+                Back to Login
+            </button>
+        }
+        else
+        {
+            @if (!showEnrollmentForm)
+            {
+                <!-- Admin Information Form -->
+                <div class="admin-form">
+                    <div class="form-group">
+                        <label>Username *</label>
+                        <input type="text" @bind="newAdmin.Username" placeholder="admin" class="form-control" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Full Name *</label>
+                        <input type="text" @bind="newAdmin.Name" placeholder="Administrator Name" class="form-control" />
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-error">⚠️ @errorMessage</div>
+                    }
+
+                    <div class="form-actions">
+                        <button class="btn btn-cancel" @onclick='() => Navigation.NavigateTo("/")'>Cancel</button>
+                        <button class="btn btn-primary" @onclick="StartEnrollment" disabled="@(!IsFormValid())">
+                            Next: Capture Fingerprint →
+                        </button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <!-- Fingerprint Capture -->
+                <div class="fingerprint-section">
+                    <div class="admin-summary">
+                        <h3>@newAdmin.Name (@newAdmin.Username)</h3>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-error">⚠️ @errorMessage</div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(successMessage))
+                    {
+                        <div class="alert alert-success">✓ @successMessage</div>
+                    }
+
+                    <div class="fingerprint-icon">
+                        <span style="font-size: 80px;">@(isCapturing ? "👆" : "🖐️")</span>
+                    </div>
+
+                    @if (isCapturing)
+                    {
+                        <p class="status-text">Place your finger on the scanner...</p>
+                        <div class="loading-spinner"></div>
+                    }
+                    else if (capturedTemplate == null)
+                    {
+                        <button class="btn btn-primary btn-large" @onclick="CaptureFingerprint">
+                            Scan Fingerprint
+                        </button>
+                    }
+
+                    @if (capturedTemplate != null)
+                    {
+                        <div class="fingerprint-preview">
+                            <p>✓ Fingerprint captured</p>
+                            <p class="quality-text">Quality: @capturedTemplate.Quality%</p>
+                        </div>
+
+                        <button class="btn btn-primary btn-block" @onclick="SaveAdmin" disabled="@isSaving">
+                            @(isSaving ? "Saving..." : "Complete Registration")
+                        </button>
+                    }
+
+                    <button class="btn btn-link" @onclick="CancelEnrollment">← Back</button>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+<style>
+    .register-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 20px;
+    }
+
+    .register-card {
+        background: white;
+        border-radius: 20px;
+        padding: 40px;
+        max-width: 600px;
+        width: 100%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .register-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .register-header h1 {
+        color: #333;
+        margin-bottom: 10px;
+    }
+
+    .register-header p {
+        color: #666;
+    }
+
+    .admin-form, .fingerprint-section {
+        margin-top: 20px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 16px;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 30px;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+
+    .btn-primary {
+        background: #667eea;
+        color: white;
+        flex: 1;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background: #5568d3;
+    }
+
+    .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .btn-cancel, .btn-secondary {
+        background: #e0e0e0;
+        color: #333;
+    }
+
+    .btn-cancel:hover, .btn-secondary:hover {
+        background: #d0d0d0;
+    }
+
+    .btn-link {
+        background: none;
+        border: none;
+        color: #667eea;
+        cursor: pointer;
+        padding: 10px;
+        text-decoration: none;
+    }
+
+    .btn-link:hover {
+        text-decoration: underline;
+    }
+
+    .btn-large {
+        padding: 15px 40px;
+        font-size: 18px;
+    }
+
+    .btn-block {
+        width: 100%;
+        padding: 15px;
+        font-size: 18px;
+        margin-top: 20px;
+    }
+
+    .fingerprint-section {
+        text-align: center;
+        padding: 20px;
+    }
+
+    .admin-summary {
+        margin-bottom: 30px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 10px;
+    }
+
+    .fingerprint-icon {
+        margin: 30px 0;
+        animation: pulse 2s infinite;
+    }
+
+    @@keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+    }
+
+    .status-text {
+        color: #667eea;
+        font-weight: 600;
+        margin-bottom: 15px;
+    }
+
+    .loading-spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #667eea;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto;
+    }
+
+    @@keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .fingerprint-preview {
+        margin: 20px 0;
+        padding: 15px;
+        background: #d4edda;
+        border-radius: 10px;
+    }
+
+    .quality-text {
+        color: #28a745;
+        font-weight: 600;
+    }
+
+    .alert {
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+
+    .alert-error {
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }
+
+    .alert-success {
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+
+    .alert-info {
+        background-color: #d1ecf1;
+        color: #0c5460;
+        border: 1px solid #bee5eb;
+    }
+</style>
+
+@code {
+    private AttendanceWeb.Models.Admin newAdmin = new();
+    private bool showEnrollmentForm = false;
+    private bool showExistingWarning = false;
+    private bool isCapturing = false;
+    private bool isSaving = false;
+    private FingerprintTemplate? capturedTemplate;
+    private string errorMessage = "";
+    private string successMessage = "";
+    private int existingAdmins = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var admins = await Database.GetAllAdminsAsync();
+        existingAdmins = admins.Count;
+    }
+
+    private bool IsFormValid()
+    {
+        return !string.IsNullOrWhiteSpace(newAdmin.Username) &&
+               !string.IsNullOrWhiteSpace(newAdmin.Name);
+    }
+
+    private void StartEnrollment()
+    {
+        errorMessage = "";
+        showEnrollmentForm = true;
+    }
+
+    private void CancelEnrollment()
+    {
+        showEnrollmentForm = false;
+        capturedTemplate = null;
+        errorMessage = "";
+    }
+
+    private async Task CaptureFingerprint()
+    {
+        errorMessage = "";
+        successMessage = "";
+        isCapturing = true;
+        capturedTemplate = null;
+
+        try
+        {
+            var result = await ApiClient.CaptureAsync();
+
+            if (result.Success && result.Template != null)
+            {
+                capturedTemplate = new FingerprintTemplate
+                {
+                    TemplateData = result.Template,
+                    Quality = result.Quality
+                };
+
+                if (capturedTemplate.Quality < 30)
+                {
+                    errorMessage = "Poor fingerprint quality. Please try again with a cleaner finger.";
+                    capturedTemplate = null;
+                }
+                else
+                {
+                    successMessage = "Fingerprint captured successfully!";
+                }
+            }
+            else
+            {
+                errorMessage = result.Error ?? result.Message ?? "Failed to capture fingerprint";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isCapturing = false;
+        }
+    }
+
+    private async Task SaveAdmin()
+    {
+        if (capturedTemplate == null) return;
+
+        errorMessage = "";
+        isSaving = true;
+
+        try
+        {
+            newAdmin.TemplateData = capturedTemplate.TemplateData;
+            newAdmin.CreatedDate = DateTime.Now;
+
+            await Task.Run(() => Database.AddAdmin(newAdmin));
+            
+            successMessage = "Admin registered successfully! Redirecting to login...";
+            await Task.Delay(2000);
+            Navigation.NavigateTo("/admin/login");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving admin: {ex.Message}";
+            isSaving = false;
+        }
+    }
+}

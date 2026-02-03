@@ -1,0 +1,1179 @@
+@page "/admin/dashboard"
+@using AttendanceWeb.Models
+@using AttendanceWeb.Services
+@inject AttendanceDatabase Database
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Admin Dashboard</PageTitle>
+
+@if (!AuthService.IsAdminAuthenticated)
+{
+    <div class="unauthorized-container">
+        <div class="unauthorized-card">
+            <div class="unauthorized-icon">🔒</div>
+            <h2>Access Denied</h2>
+            <p>You need to be logged in as an admin to access this page.</p>
+            <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/admin/login")'>
+                Go to Admin Login
+            </button>
+        </div>
+    </div>
+}
+else
+{
+    <div class="page-container">
+        <div class="content-card">
+            <div class="page-header">
+                <div>
+                    <h1>⚙️ Admin Dashboard</h1>
+                    <p>Welcome, @AuthService.AdminUsername</p>
+                </div>
+                <button class="btn btn-secondary" @onclick="Logout">Logout</button>
+            </div>
+
+        <!-- Tab Navigation -->
+        <div class="tabs">
+            <button class="tab @(activeTab == "events" ? "active" : "")" @onclick='() => activeTab = "events"'>
+                📅 Events
+            </button>
+            <button class="tab @(activeTab == "students" ? "active" : "")" @onclick='() => activeTab = "students"'>
+                👥 Students
+            </button>
+            <button class="tab @(activeTab == "records" ? "active" : "")" @onclick='() => activeTab = "records"'>
+                📋 Records
+            </button>
+            <button class="tab @(activeTab == "stats" ? "active" : "")" @onclick='() => activeTab = "stats"'>
+                📊 Statistics
+            </button>
+        </div>
+
+        <!-- Events Tab -->
+        @if (activeTab == "events")
+        {
+            <div class="tab-content">
+                <div class="section-header">
+                    <h2>Event Management</h2>
+                    <button class="btn btn-primary" @onclick="ShowNewEventForm">+ Create Event</button>
+                </div>
+
+                @if (showEventForm)
+                {
+                    <div class="form-card">
+                        <h3>@(editingEvent == null ? "New Event" : "Edit Event")</h3>
+                        <div class="form-group">
+                            <label>Event Name *</label>
+                            <input type="text" @bind="eventForm.EventName" class="form-control" />
+                        </div>
+
+                        <div class="form-group">
+                            <label>Description</label>
+                            <textarea @bind="eventForm.Description" class="form-control" rows="3"></textarea>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Period *</label>
+                                <select @bind="eventForm.Period" class="form-control">
+                                    <option value="Midterm">Midterm</option>
+                                    <option value="Final">Final</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Academic Year *</label>
+                                <input type="text" @bind="eventForm.AcademicYear" 
+                                       placeholder="2024-2025" class="form-control" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Event Date *</label>
+                                <input type="date" @bind="eventForm.EventDate" class="form-control" />
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                             <div class="form-group">
+                                <label>Time In (Start)</label>
+                                <input type="text" @bind="eventForm.TimeInStart" placeholder="HH:mm" class="form-control" />
+                             </div>
+                             <div class="form-group">
+                                <label>Time In (End)</label>
+                                <input type="text" @bind="eventForm.TimeInEnd" placeholder="HH:mm" class="form-control" />
+                             </div>
+                        </div>
+
+                        <div class="form-row">
+                             <div class="form-group">
+                                <label>Time Out (Start)</label>
+                                <input type="text" @bind="eventForm.TimeOutStart" placeholder="HH:mm" class="form-control" />
+                             </div>
+                             <div class="form-group">
+                                <label>Time Out (End)</label>
+                                <input type="text" @bind="eventForm.TimeOutEnd" placeholder="HH:mm" class="form-control" />
+                             </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button class="btn btn-cancel" @onclick="CancelEventForm">Cancel</button>
+                            <button class="btn btn-primary" @onclick="SaveEvent">
+                                @(editingEvent == null ? "Create" : "Update") Event
+                            </button>
+                        </div>
+                    </div>
+                }
+
+                <div class="events-list">
+                    @foreach (var evt in events.OrderByDescending(e => e.EventDate))
+                    {
+                        <div class="event-card">
+                            <div class="event-header">
+                                <div>
+                                    <h4>@evt.EventName</h4>
+                                    <p>@evt.Period - @evt.AcademicYear</p>
+                                    <p class="event-date">📅 @evt.EventDate.ToString("MMMM dd, yyyy")</p>
+                                </div>
+                                <div class="event-actions">
+                                    <button class="btn-icon" @onclick="() => EditEvent(evt)" title="Edit">✏️</button>
+                                    <button class="btn-icon" @onclick="() => ToggleEventStatus(evt)" 
+                                            title="@(evt.IsActive ? "Deactivate" : "Activate")">
+                                        @(evt.IsActive ? "✓" : "✗")
+                                    </button>
+                                    <button class="btn-icon danger" @onclick="() => DeleteEvent(evt)" title="Delete">🗑️</button>
+                                </div>
+                            </div>
+                            @if (!string.IsNullOrEmpty(evt.Description))
+                            {
+                                <p class="event-desc">@evt.Description</p>
+                            }
+                            <span class="status-badge @(evt.IsActive ? "active" : "inactive")">
+                                @(evt.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Students Tab -->
+        @if (activeTab == "students")
+        {
+            <div class="tab-content">
+                <div class="section-header">
+                    <h2>Student Management</h2>
+                    <div class="search-box">
+                        <input type="text" @bind="studentSearch" @bind:after="FilterStudents" 
+                               placeholder="Search students..." class="form-control" />
+                    </div>
+                </div>
+
+                <div class="students-grid">
+                    @foreach (var student in filteredStudents)
+                    {
+                        <div class="student-card">
+                            <div class="student-avatar">@GetInitials(student.Name)</div>
+                            <div class="student-info">
+                                <h4>@student.Name</h4>
+                                <p>@student.StudentId</p>
+                                <p>@student.Program - Year @student.YearLevel</p>
+                                <p class="enrolled-date">Enrolled: @student.EnrolledDate.ToString("MMM dd, yyyy")</p>
+                            </div>
+                            <div class="student-actions">
+                                <button class="btn-icon" @onclick="() => ToggleStudentStatus(student)" 
+                                        title="@(student.IsActive ? "Deactivate" : "Activate")">
+                                    @(student.IsActive ? "✓" : "✗")
+                                </button>
+                                <button class="btn-icon danger" @onclick="() => DeleteStudent(student)" title="Delete">
+                                    🗑️
+                                </button>
+                            </div>
+                            <span class="status-badge @(student.IsActive ? "active" : "inactive")">
+                                @(student.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </div>
+                    }
+                </div>
+
+                @if (filteredStudents.Count == 0)
+                {
+                    <div class="no-data">
+                        <div class="icon">🔍</div>
+                        <p>No students found</p>
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Records Tab -->
+        @if (activeTab == "records")
+        {
+            <div class="tab-content">
+                <div class="section-header">
+                    <h2>Attendance Records</h2>
+                    <div class="form-group" style="margin: 0; min-width: 300px;">
+                        <select @bind="selectedEventId" @bind:after="() => LoadEventRecords(selectedEventId)" class="form-control">
+                            @foreach (var evt in events.OrderByDescending(e => e.EventDate))
+                            {
+                                <option value="@evt.Id">@evt.EventName (@evt.Period - @evt.AcademicYear)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                @if (eventRecords.Count > 0)
+                {
+                    <div class="records-table-container">
+                        <table class="records-table">
+                            <thead>
+                                <tr>
+                                    <th>Student ID</th>
+                                    <th>Name</th>
+                                    <th>Program</th>
+                                    <th>Time In</th>
+                                    <th>Time Out</th>
+                                    <th>Status</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var record in eventRecords)
+                                {
+                                    var status = record.Record.TimeIn != null && record.Record.TimeOut != null ? "Complete" :
+                                                 record.Record.TimeIn != null ? "Time In Only" : "No Record";
+                                    var statusClass = status == "Complete" ? "status-complete" : 
+                                                     status == "Time In Only" ? "status-partial" : "status-none";
+                                    
+                                    <tr>
+                                        <td>@record.Student.StudentId</td>
+                                        <td><strong>@record.Student.Name</strong></td>
+                                        <td>@($"{record.Student.Program} Y{record.Student.YearLevel}")</td>
+                                        <td>@(record.Record.TimeIn?.ToString("hh:mm tt") ?? "-")</td>
+                                        <td>@(record.Record.TimeOut?.ToString("hh:mm tt") ?? "-")</td>
+                                        <td><span class="status-badge @statusClass">@status</span></td>
+                                        <td>@record.Record.RecordDate.ToString("MMM dd, yyyy")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div style="margin-top: var(--space-4); color: var(--neutral-600); font-size: 0.875rem;">
+                        <strong>@eventRecords.Count</strong> attendance record(s) found
+                    </div>
+                }
+                else
+                {
+                    <div class="no-data">
+                        <div class="icon">📋</div>
+                        <p>No attendance records for this event</p>
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Statistics Tab -->
+        @if (activeTab == "stats")
+        {
+            <div class="tab-content">
+                <h2>System Statistics</h2>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">👥</div>
+                        <div class="stat-content">
+                            <div class="stat-value">@students.Count</div>
+                            <div class="stat-label">Total Students</div>
+                            <div class="stat-detail">@students.Count(s => s.IsActive) Active</div>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon">📅</div>
+                        <div class="stat-content">
+                            <div class="stat-value">@events.Count</div>
+                            <div class="stat-label">Total Events</div>
+                            <div class="stat-detail">@events.Count(e => e.IsActive) Active</div>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon">👆</div>
+                        <div class="stat-content">
+                            <div class="stat-value">@totalTemplates</div>
+                            <div class="stat-label">Fingerprint Templates</div>
+                            <div class="stat-detail">@(students.Count * 5) Expected</div>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon">✓</div>
+                        <div class="stat-content">
+                            <div class="stat-value">@totalAttendance</div>
+                            <div class="stat-label">Total Attendance</div>
+                            <div class="stat-detail">All Time</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="recent-activity">
+                    <h3>Recent Students</h3>
+                    <div class="activity-list">
+                        @foreach (var student in students.OrderByDescending(s => s.EnrolledDate).Take(5))
+                        {
+                            <div class="activity-item">
+                                <div class="activity-icon">✨</div>
+                                <div class="activity-content">
+                                    <strong>@student.Name</strong> enrolled
+                                    <span class="activity-time">@GetTimeAgo(student.EnrolledDate)</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+}
+
+<style>
+    .unauthorized-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .unauthorized-card {
+        background: white;
+        border-radius: 20px;
+        padding: 60px 40px;
+        max-width: 500px;
+        text-align: center;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .unauthorized-icon {
+        font-size: 80px;
+        margin-bottom: 20px;
+    }
+
+    .unauthorized-card h2 {
+        color: #333;
+        margin-bottom: 15px;
+    }
+
+    .unauthorized-card p {
+        color: #666;
+        margin-bottom: 30px;
+    }
+
+    .page-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: var(--space-8);
+    }
+
+    .content-card {
+        background: white;
+        border: 1px solid var(--neutral-200);
+        border-radius: var(--radius-2xl);
+        padding: var(--space-8);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .page-header {
+        text-align: center;
+        margin-bottom: var(--space-8);
+        position: relative;
+    }
+
+    .btn-back {
+        position: absolute;
+        left: 0;
+        top: 0;
+        padding: var(--space-3) var(--space-5);
+        border: 1px solid var(--neutral-300);
+        background: white;
+        color: var(--neutral-700);
+        border-radius: var(--radius-lg);
+        font-weight: 600;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all var(--transition-base);
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+
+    .btn-back:hover {
+        background: var(--neutral-50);
+        border-color: var(--neutral-400);
+        transform: translateX(-2px);
+    }
+
+    .page-header h1 {
+        color: var(--neutral-900);
+        font-size: 1.875rem;
+        margin-bottom: var(--space-2);
+        font-weight: 700;
+    }
+
+    .page-header p {
+        color: var(--neutral-600);
+        font-size: 1rem;
+    }
+
+    .tabs {
+        display: flex;
+        gap: var(--space-1);
+        margin-bottom: var(--space-8);
+        border-bottom: 1px solid var(--neutral-200);
+        overflow-x: auto;
+    }
+
+    .tab {
+        padding: var(--space-4) var(--space-5);
+        border: none;
+        background: none;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.875rem;
+        color: var(--neutral-600);
+        border-bottom: 2px solid transparent;
+        transition: all var(--transition-base);
+        white-space: nowrap;
+    }
+
+    .tab:hover {
+        color: var(--primary-600);
+        background: var(--neutral-50);
+    }
+
+    .tab.active {
+        color: var(--primary-600);
+        border-bottom-color: var(--primary-600);
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--space-6);
+        gap: var(--space-4);
+    }
+
+    .section-header h2 {
+        color: var(--neutral-900);
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+
+    .btn-cancel {
+        background: white;
+        color: var(--neutral-700);
+        border: 1px solid var(--neutral-300);
+    }
+
+    .btn-cancel:hover {
+        background: var(--neutral-50);
+        border-color: var(--neutral-400);
+        transform: none;
+    }
+
+    .form-card {
+        background: var(--neutral-50);
+        padding: var(--space-6);
+        border-radius: var(--radius-xl);
+        margin-bottom: var(--space-6);
+        border: 1px solid var(--neutral-200);
+    }
+
+    .form-card h3 {
+        color: var(--neutral-900);
+        margin-bottom: var(--space-5);
+        font-size: 1.125rem;
+        font-weight: 600;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: var(--space-4);
+    }
+
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: var(--space-4);
+        margin-top: var(--space-6);
+        padding-top: var(--space-5);
+        border-top: 1px solid var(--neutral-200);
+    }
+
+    .events-list {
+        display: grid;
+        gap: var(--space-4);
+    }
+
+    .event-card {
+        background: white;
+        padding: var(--space-6);
+        border-radius: var(--radius-xl);
+        position: relative;
+        border: 1px solid var(--neutral-200);
+        transition: all var(--transition-base);
+    }
+
+    .event-card:hover {
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
+    }
+
+    .event-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        gap: var(--space-4);
+    }
+
+    .event-header h4 {
+        color: var(--neutral-900);
+        margin-bottom: var(--space-2);
+        font-size: 1.125rem;
+        font-weight: 600;
+    }
+
+    .event-header p {
+        color: var(--neutral-600);
+        font-size: 0.875rem;
+        margin: var(--space-1) 0;
+    }
+
+    .event-date {
+        font-weight: 600;
+        color: var(--neutral-700);
+    }
+
+    .event-desc {
+        color: var(--neutral-600);
+        margin-top: var(--space-4);
+        font-size: 0.875rem;
+        line-height: 1.5;
+    }
+
+    .event-actions {
+        display: flex;
+        gap: var(--space-2);
+        flex-shrink: 0;
+    }
+
+    .btn-icon {
+        padding: var(--space-2);
+        background: white;
+        border: 1px solid var(--neutral-300);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        font-size: 1.125rem;
+        transition: all var(--transition-base);
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-icon:hover {
+        transform: translateY(-2px);
+        border-color: var(--primary-500);
+        background: var(--primary-50);
+    }
+
+    .btn-icon.danger:hover {
+        border-color: var(--error-500);
+        background: var(--error-50);
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: var(--space-1) var(--space-3);
+        border-radius: var(--radius-full);
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-top: var(--space-4);
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+
+    .status-badge.active {
+        background: var(--success-50, #f0fdf4);
+        color: var(--success-700);
+    }
+
+    .status-badge.inactive {
+        background: var(--error-50, #fef2f2);
+        color: var(--error-600);
+    }
+
+    .search-box {
+        flex: 1;
+        max-width: 400px;
+    }
+
+    .students-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: var(--space-4);
+    }
+
+    .student-card {
+        background: white;
+        padding: var(--space-5);
+        border-radius: var(--radius-xl);
+        display: flex;
+        gap: var(--space-4);
+        align-items: start;
+        position: relative;
+        border: 1px solid var(--neutral-200);
+        transition: all var(--transition-base);
+    }
+
+    .student-card:hover {
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
+    }
+
+    .student-avatar {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-700) 100%);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+
+    .student-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .student-info h4 {
+        color: var(--neutral-900);
+        margin-bottom: var(--space-1);
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    .student-info p {
+        color: var(--neutral-600);
+        font-size: 0.875rem;
+        margin: var(--space-1) 0;
+    }
+
+    .enrolled-date {
+        font-size: 0.8125rem !important;
+        color: var(--neutral-500) !important;
+        margin-top: var(--space-2) !important;
+    }
+
+    .student-actions {
+        display: flex;
+        gap: var(--space-2);
+        flex-shrink: 0;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: var(--space-5);
+        margin-bottom: var(--space-8);
+    }
+
+    .stat-card {
+        background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-700) 100%);
+        color: white;
+        padding: var(--space-6);
+        border-radius: var(--radius-xl);
+        display: flex;
+        gap: var(--space-4);
+        align-items: center;
+        box-shadow: var(--shadow-md);
+        transition: all var(--transition-base);
+    }
+
+    .stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-lg);
+    }
+
+    .stat-icon {
+        font-size: 3rem;
+        width: 72px;
+        height: 72px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: var(--radius-xl);
+    }
+
+    .stat-content {
+        flex: 1;
+    }
+
+    .stat-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        line-height: 1;
+        margin-bottom: var(--space-2);
+    }
+
+    .stat-label {
+        font-size: 0.875rem;
+        opacity: 0.95;
+        font-weight: 500;
+    }
+
+    .stat-detail {
+        font-size: 0.8125rem;
+        opacity: 0.9;
+        margin-top: var(--space-1);
+    }
+
+    .recent-activity {
+        background: white;
+        padding: var(--space-6);
+        border-radius: var(--radius-xl);
+        border: 1px solid var(--neutral-200);
+    }
+
+    .recent-activity h3 {
+        color: var(--neutral-900);
+        margin-bottom: var(--space-5);
+        font-size: 1.125rem;
+        font-weight: 600;
+    }
+
+    .activity-list {
+        display: grid;
+        gap: var(--space-3);
+    }
+
+    .activity-item {
+        display: flex;
+        gap: var(--space-4);
+        align-items: center;
+        padding: var(--space-4);
+        background: var(--neutral-50);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--neutral-200);
+    }
+
+    .activity-icon {
+        font-size: 1.5rem;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: white;
+        border-radius: var(--radius-md);
+    }
+
+    .activity-content {
+        flex: 1;
+        font-size: 0.875rem;
+        color: var(--neutral-700);
+    }
+
+    .activity-content strong {
+        color: var(--neutral-900);
+        font-weight: 600;
+    }
+
+    .activity-time {
+        color: var(--neutral-500);
+        font-size: 0.8125rem;
+        margin-left: var(--space-2);
+    }
+
+    .no-data {
+        text-align: center;
+        padding: var(--space-12);
+        color: var(--neutral-500);
+    }
+
+    .no-data .icon {
+        font-size: 4rem;
+        margin-bottom: var(--space-4);
+        opacity: 0.5;
+    }
+
+    .no-data p {
+        margin: 0;
+        font-size: 0.875rem;
+    }
+
+    .records-table-container {
+        overflow-x: auto;
+        border: 1px solid var(--neutral-200);
+        border-radius: var(--radius-lg);
+        margin-top: var(--space-5);
+    }
+
+    .records-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+    }
+
+    .records-table thead {
+        background: var(--neutral-50);
+        border-bottom: 2px solid var(--neutral-200);
+    }
+
+    .records-table th {
+        padding: var(--space-4);
+        text-align: left;
+        font-weight: 600;
+        color: var(--neutral-700);
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .records-table td {
+        padding: var(--space-4);
+        border-bottom: 1px solid var(--neutral-100);
+        color: var(--neutral-600);
+        font-size: 0.9375rem;
+    }
+
+    .records-table tbody tr:hover {
+        background: var(--neutral-50);
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: var(--radius-md);
+        font-size: 0.8125rem;
+        font-weight: 600;
+    }
+
+    .status-complete {
+        background: #d1fae5;
+        color: #065f46;
+    }
+
+    .status-partial {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .status-none {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    @@media (max-width: 1024px) {
+        .section-header {
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            max-width: none;
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .page-container {
+            padding: var(--space-5);
+        }
+
+        .content-card {
+            padding: var(--space-5);
+        }
+
+        .tabs {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .section-header {
+            flex-direction: column;
+            align-items: stretch;
+            gap: var(--space-4);
+        }
+
+        .students-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .page-header h1 {
+            font-size: 1.5rem;
+        }
+
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+@code {
+    private string activeTab = "events";
+    private List<Event> events = new();
+    private List<Student> students = new();
+    private List<Student> filteredStudents = new();
+    private string studentSearch = "";
+    private bool showEventForm = false;
+    private Event eventForm = new();
+    private Event? editingEvent = null;
+    private int totalTemplates = 0;
+    private int totalAttendance = 0;
+    
+    // Records Tab
+    private List<AttendanceInfo> eventRecords = new();
+    private int selectedEventId = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            events = await Task.Run(() => Database.GetAllEvents());
+            students = await Task.Run(() => Database.GetAllStudents());
+            filteredStudents = students;
+            
+            // Auto-select first event if none selected
+            if (selectedEventId == 0 && events.Count > 0)
+            {
+                selectedEventId = events[0].Id;
+                await LoadEventRecords(selectedEventId);
+            }
+
+            // Count total templates
+            totalTemplates = 0;
+            foreach (var student in students)
+            {
+                var templates = await Task.Run(() => Database.GetStudentTemplates(student.Id));
+                totalTemplates += templates.Count;
+            }
+
+            // Count total attendance records
+            totalAttendance = 0;
+            foreach (var evt in events)
+            {
+                var attendance = await Task.Run(() => Database.GetEventAttendance(evt.Id));
+                totalAttendance += attendance.Count;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading data: {ex.Message}");
+        }
+    }
+
+    private async Task LoadEventRecords(int eventId)
+    {
+        try 
+        {
+            selectedEventId = eventId;
+            eventRecords = await Task.Run(() => Database.GetEventAttendance(eventId));
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading records: {ex.Message}");
+        }
+    }
+
+
+    private void ShowNewEventForm()
+    {
+        editingEvent = null;
+        eventForm = new Event
+        {
+            EventDate = DateTime.Today,
+            Period = "Midterm",
+            AcademicYear = $"{DateTime.Now.Year}-{DateTime.Now.Year + 1}",
+            IsActive = true
+        };
+        showEventForm = true;
+    }
+
+    private void EditEvent(Event evt)
+    {
+        editingEvent = evt;
+        eventForm = new Event
+        {
+            EventName = evt.EventName,
+            Description = evt.Description,
+            EventDate = evt.EventDate,
+            Period = evt.Period,
+            AcademicYear = evt.AcademicYear,
+            IsActive = evt.IsActive,
+            TimeInStart = evt.TimeInStart,
+            TimeInEnd = evt.TimeInEnd,
+            TimeOutStart = evt.TimeOutStart,
+            TimeOutEnd = evt.TimeOutEnd
+        };
+        showEventForm = true;
+    }
+
+    private void CancelEventForm()
+    {
+        showEventForm = false;
+        editingEvent = null;
+    }
+
+    private async Task SaveEvent()
+    {
+        try
+        {
+            if (editingEvent == null)
+            {
+                await Task.Run(() => Database.AddEvent(eventForm));
+            }
+            else
+            {
+                eventForm.Id = editingEvent.Id;
+                await Task.Run(() => Database.UpdateEvent(eventForm));
+            }
+
+            showEventForm = false;
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving event: {ex.Message}");
+        }
+    }
+
+    private async Task ToggleEventStatus(Event evt)
+    {
+        try
+        {
+            evt.IsActive = !evt.IsActive;
+            await Task.Run(() => Database.UpdateEvent(evt));
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error toggling event status: {ex.Message}");
+        }
+    }
+
+    private async Task DeleteEvent(Event evt)
+    {
+        if (confirm($"Delete event '{evt.EventName}'?"))
+        {
+            try
+            {
+                await Task.Run(() => Database.DeleteEvent(evt.Id));
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error deleting event: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task ToggleStudentStatus(Student student)
+    {
+        try
+        {
+            student.IsActive = !student.IsActive;
+            await Task.Run(() => Database.UpdateStudent(student));
+            await LoadData();
+            FilterStudents();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error toggling student status: {ex.Message}");
+        }
+    }
+
+    private async Task DeleteStudent(Student student)
+    {
+        if (confirm($"Delete student '{student.Name}'? This will also delete all fingerprint templates and attendance records."))
+        {
+            try
+            {
+                await Task.Run(() => Database.DeleteStudent(student.Id));
+                await LoadData();
+                FilterStudents();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error deleting student: {ex.Message}");
+            }
+        }
+    }
+
+    private void FilterStudents()
+    {
+        if (string.IsNullOrWhiteSpace(studentSearch))
+        {
+            filteredStudents = students;
+        }
+        else
+        {
+            var query = studentSearch.ToLower();
+            filteredStudents = students.Where(s =>
+                s.Name.ToLower().Contains(query) ||
+                s.StudentId.ToLower().Contains(query) ||
+                s.Program.ToLower().Contains(query)
+            ).ToList();
+        }
+    }
+
+    private string GetInitials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[parts.Length - 1][0]}".ToUpper();
+        return name.Length > 0 ? name.Substring(0, Math.Min(2, name.Length)).ToUpper() : "?";
+    }
+
+    private string GetTimeAgo(DateTime date)
+    {
+        var diff = DateTime.Now - date;
+        if (diff.TotalMinutes < 1) return "Just now";
+        if (diff.TotalHours < 1) return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays < 1) return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 30) return $"{(int)diff.TotalDays}d ago";
+        return date.ToString("MMM dd, yyyy");
+    }
+
+    private bool confirm(string message)
+    {
+        // In a real app, use JavaScript interop for confirmation
+        // For now, we'll just return true
+        Console.WriteLine($"Confirm: {message}");
+        return true;
+    }
+
+    private void Logout()
+    {
+        AuthService.Logout();
+        Navigation.NavigateTo("/admin/login");
+    }
+}

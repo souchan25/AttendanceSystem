@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.9" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="DPUruNet">
+      <HintPath>..\Libs\DPUruNet.dll</HintPath>
+    </Reference>
+    <Reference Include="dpfpdd">
+      <HintPath>..\Libs\dpfpdd.dll</HintPath>
+    </Reference>
+    <Reference Include="dpfpdd_ptapi">
+      <HintPath>..\Libs\dpfpdd_ptapi.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,582 @@
+@page "/enroll"
+@using AttendanceWeb.Models
+@using AttendanceWeb.Services
+@inject AttendanceDatabase Database
+@inject FingerprintApiClient ApiClient
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Student Enrollment</PageTitle>
+
+@if (!AuthService.IsAdminAuthenticated)
+{
+    <div class="unauthorized-container">
+        <div class="unauthorized-card">
+            <div class="unauthorized-icon">🔒</div>
+            <h2>Access Denied</h2>
+            <p>You need to be logged in as an admin to enroll students.</p>
+            <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/admin/login")'>
+                Go to Admin Login
+            </button>
+        </div>
+    </div>
+}
+else
+{
+<div class="page-container">
+    <div class="content-card">
+        <div class="page-header">
+            <button class="btn-back" @onclick='() => Navigation.NavigateTo("/")'>← Back</button>
+            <h1>🎓 Student Enrollment</h1>
+            <p>Register new student with 5 fingerprint samples</p>
+        </div>
+
+        @if (!showEnrollmentForm)
+        {
+            <!-- Student Information Form -->
+            <div class="student-form">
+                <div class="form-group">
+                    <label>Student ID *</label>
+                    <input type="text" @bind="newStudent.StudentId" placeholder="e.g., 2024-0001" class="form-control" />
+                </div>
+
+                <div class="form-group">
+                    <label>Full Name *</label>
+                    <input type="text" @bind="newStudent.Name" placeholder="Juan Dela Cruz" class="form-control" />
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Program *</label>
+                        <input type="text" @bind="newStudent.Program" placeholder="e.g., BSCS" class="form-control" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Year Level *</label>
+                        <select @bind="newStudent.YearLevel" class="form-control">
+                            <option value="1">1st Year</option>
+                            <option value="2">2nd Year</option>
+                            <option value="3">3rd Year</option>
+                            <option value="4">4th Year</option>
+                        </select>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-error">⚠️ @errorMessage</div>
+                }
+
+                <div class="form-actions">
+                    <button class="btn btn-cancel" @onclick='() => Navigation.NavigateTo("/")'>Cancel</button>
+                    <button class="btn btn-primary" @onclick="StartEnrollment" disabled="@(!IsFormValid())">
+                        Next: Capture Fingerprints →
+                    </button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- Fingerprint Capture Form -->
+            <div class="fingerprint-capture">
+                <div class="student-summary">
+                    <h3>@newStudent.Name (@newStudent.StudentId)</h3>
+                    <p>@newStudent.Program - Year @newStudent.YearLevel</p>
+                </div>
+
+                <div class="progress-section">
+                    <h3>Fingerprint Samples: @capturedTemplates.Count / 5</h3>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: @(capturedTemplates.Count * 20)%"></div>
+                    </div>
+                    <p class="hint">Please scan your finger from 5 different angles for better accuracy</p>
+                </div>
+
+                <div class="samples-grid">
+                    @for (int i = 1; i <= 5; i++)
+                    {
+                        int sampleNum = i;
+                        var template = capturedTemplates.FirstOrDefault(t => t.SampleNumber == sampleNum);
+                        
+                        <div class="sample-card @(template != null ? "captured" : "")">
+                            <div class="sample-header">
+                                <span class="sample-number">Sample @sampleNum</span>
+                                @if (template != null)
+                                {
+                                    <span class="check">✓</span>
+                                }
+                            </div>
+                            
+                            @if (currentSample == sampleNum && isCapturing)
+                            {
+                                <div class="capturing">
+                                    <div class="spinner"></div>
+                                    <p>Scanning...</p>
+                                </div>
+                            }
+                            else if (template != null)
+                            {
+                                <div class="captured-info">
+                                    <span class="quality">Quality: @template.Quality</span>
+                                    <span class="time">@template.CapturedDate.ToString("hh:mm tt")</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <button class="btn-capture" @onclick="() => CaptureSample(sampleNum)" 
+                                        disabled="@(isCapturing || capturedTemplates.Count != sampleNum - 1)">
+                                    <span class="icon">👆</span>
+                                    Capture
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @if (!string.IsNullOrEmpty(captureMessage))
+                {
+                    <div class="alert @(captureMessage.Contains("Success") ? "alert-success" : "alert-error")">
+                        @captureMessage
+                    </div>
+                }
+
+                <div class="form-actions">
+                    <button class="btn btn-cancel" @onclick="CancelEnrollment" disabled="@isCapturing">
+                        ← Back to Form
+                    </button>
+                    <button class="btn btn-success" @onclick="SaveEnrollment" 
+                            disabled="@(capturedTemplates.Count < 5 || isSaving)">
+                        @(isSaving ? "Saving..." : "Complete Enrollment ✓")
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .unauthorized-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-800) 100%);
+        padding: var(--space-6);
+    }
+
+    .unauthorized-card {
+        background: white;
+        border-radius: var(--radius-xl);
+        padding: var(--space-8);
+        max-width: 400px;
+        text-align: center;
+        box-shadow: var(--shadow-xl);
+    }
+
+    .unauthorized-icon {
+        font-size: 4rem;
+        margin-bottom: var(--space-4);
+    }
+
+    .unauthorized-card h2 {
+        color: var(--gray-900);
+        margin-bottom: var(--space-3);
+    }
+
+    .unauthorized-card p {
+        color: var(--gray-600);
+        margin-bottom: var(--space-6);
+    }
+
+    .page-container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: var(--space-8);
+    }
+
+    .content-card {
+        background: white;
+        border: 1px solid var(--neutral-200);
+        border-radius: var(--radius-2xl);
+        padding: var(--space-8);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .page-header {
+        text-align: center;
+        margin-bottom: var(--space-8);
+        position: relative;
+    }
+
+    .btn-back {
+        position: absolute;
+        left: 0;
+        top: 0;
+        padding: var(--space-3) var(--space-5);
+        border: 1px solid var(--neutral-300);
+        background: white;
+        color: var(--neutral-700);
+        border-radius: var(--radius-lg);
+        font-weight: 600;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all var(--transition-base);
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+
+    .btn-back:hover {
+        background: var(--neutral-50);
+        border-color: var(--neutral-400);
+        transform: translateX(-2px);
+    }
+
+    .page-header h1 {
+        color: var(--neutral-900);
+        font-size: 1.875rem;
+        margin-bottom: var(--space-2);
+        font-weight: 700;
+    }
+
+    .page-header p {
+        color: var(--neutral-600);
+        font-size: 1rem;
+    }
+
+    .student-form {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-5);
+    }
+
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: var(--space-4);
+        margin-top: var(--space-8);
+        padding-top: var(--space-6);
+        border-top: 1px solid var(--neutral-200);
+    }
+
+    .btn-cancel {
+        background: white;
+        color: var(--neutral-700);
+        border: 1px solid var(--neutral-300);
+    }
+
+    .btn-cancel:hover:not(:disabled) {
+        background: var(--neutral-50);
+        border-color: var(--neutral-400);
+        transform: none;
+    }
+
+    .student-summary {
+        background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-700) 100%);
+        color: white;
+        padding: var(--space-6);
+        border-radius: var(--radius-xl);
+        text-align: center;
+        margin-bottom: var(--space-8);
+        box-shadow: var(--shadow-md);
+    }
+
+    .student-summary h3 {
+        margin-bottom: var(--space-2);
+        font-size: 1.5rem;
+    }
+
+    .student-summary p {
+        opacity: 0.95;
+        margin: 0;
+    }
+
+    .progress-section {
+        text-align: center;
+        margin-bottom: var(--space-8);
+    }
+
+    .progress-section h3 {
+        color: var(--neutral-900);
+        margin-bottom: var(--space-4);
+        font-size: 1.125rem;
+        font-weight: 600;
+    }
+
+    .progress-bar {
+        width: 100%;
+        height: 12px;
+        background: var(--neutral-200);
+        border-radius: var(--radius-full);
+        overflow: hidden;
+        margin-bottom: var(--space-3);
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--success-600) 0%, var(--success-500) 100%);
+        transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: var(--radius-full);
+    }
+
+    .hint {
+        color: var(--neutral-600);
+        font-size: 0.875rem;
+    }
+
+    .samples-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: var(--space-4);
+        margin-bottom: var(--space-8);
+    }
+
+    .sample-card {
+        border: 2px solid var(--neutral-200);
+        border-radius: var(--radius-xl);
+        padding: var(--space-5);
+        text-align: center;
+        transition: all var(--transition-base);
+        background: white;
+    }
+
+    .sample-card.captured {
+        border-color: var(--success-500);
+        background: var(--success-50, #f0fdf4);
+    }
+
+    .sample-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--space-4);
+    }
+
+    .sample-number {
+        font-weight: 600;
+        color: var(--neutral-900);
+        font-size: 0.875rem;
+    }
+
+    .check {
+        color: var(--success-600);
+        font-size: 1.25rem;
+    }
+
+    .btn-capture {
+        width: 100%;
+        padding: var(--space-4);
+        border: 2px dashed var(--primary-300);
+        background: var(--primary-50);
+        border-radius: var(--radius-lg);
+        cursor: pointer;
+        transition: all var(--transition-base);
+        font-weight: 500;
+        color: var(--primary-700);
+    }
+
+    .btn-capture:hover:not(:disabled) {
+        background: var(--primary-100);
+        border-color: var(--primary-500);
+        border-style: solid;
+    }
+
+    .btn-capture:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .btn-capture .icon {
+        display: block;
+        font-size: 2rem;
+        margin-bottom: var(--space-2);
+    }
+
+    .capturing {
+        padding: var(--space-4);
+    }
+
+    .capturing p {
+        color: var(--neutral-600);
+        font-size: 0.875rem;
+        margin: 0;
+    }
+
+    .captured-info {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+        color: var(--neutral-600);
+        font-size: 0.8125rem;
+    }
+
+    .quality {
+        color: var(--success-600);
+        font-weight: 600;
+    }
+
+    .time {
+        color: var(--neutral-500);
+    }
+
+    @@media (max-width: 768px) {
+        .page-container {
+            padding: var(--space-5);
+        }
+
+        .content-card {
+            padding: var(--space-5);
+        }
+
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+
+        .samples-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .page-header h1 {
+            font-size: 1.5rem;
+        }
+    }
+
+    @@media (max-width: 480px) {
+        .samples-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+@code {
+    private Student newStudent = new Student { YearLevel = 1 };
+    private List<FingerprintTemplate> capturedTemplates = new();
+    private bool showEnrollmentForm = false;
+    private bool isCapturing = false;
+    private bool isSaving = false;
+    private int currentSample = 0;
+    private string errorMessage = "";
+    private string captureMessage = "";
+
+    private bool IsFormValid()
+    {
+        return !string.IsNullOrWhiteSpace(newStudent.StudentId) &&
+               !string.IsNullOrWhiteSpace(newStudent.Name) &&
+               !string.IsNullOrWhiteSpace(newStudent.Program);
+    }
+
+    private void StartEnrollment()
+    {
+        if (!IsFormValid())
+        {
+            errorMessage = "Please fill in all required fields (*)";
+            return;
+        }
+
+        // Check if student ID already exists
+        var existingStudents = Database.GetAllStudents();
+        if (existingStudents.Any(s => s.StudentId == newStudent.StudentId))
+        {
+            errorMessage = "Student ID already exists!";
+            return;
+        }
+
+        errorMessage = "";
+        showEnrollmentForm = true;
+    }
+
+    private void CancelEnrollment()
+    {
+        showEnrollmentForm = false;
+        capturedTemplates.Clear();
+        currentSample = 0;
+        captureMessage = "";
+    }
+
+    private async Task CaptureSample(int sampleNumber)
+    {
+        isCapturing = true;
+        currentSample = sampleNumber;
+        captureMessage = $"Capturing sample {sampleNumber}...";
+        StateHasChanged();
+
+        try
+        {
+            var response = await ApiClient.CaptureAsync();
+            
+            if (response.Success && !string.IsNullOrEmpty(response.Template))
+            {
+                var template = new FingerprintTemplate
+                {
+                    SampleNumber = sampleNumber,
+                    TemplateData = response.Template,
+                    Quality = response.Quality,
+                    CapturedDate = DateTime.Now
+                };
+
+                capturedTemplates.Add(template);
+                captureMessage = $"✓ Sample {sampleNumber} captured successfully! Quality: {response.Quality}";
+            }
+            else
+            {
+                captureMessage = $"❌ Failed to capture sample {sampleNumber}: {response.Message}";
+            }
+        }
+        catch (Exception ex)
+        {
+            captureMessage = $"❌ Error: {ex.Message}";
+        }
+        finally
+        {
+            isCapturing = false;
+            currentSample = 0;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveEnrollment()
+    {
+        if (capturedTemplates.Count < 5)
+        {
+            captureMessage = "Please capture all 5 fingerprint samples first!";
+            return;
+        }
+
+        isSaving = true;
+        captureMessage = "Saving student enrollment...";
+        StateHasChanged();
+
+        try
+        {
+            newStudent.EnrolledDate = DateTime.Now;
+            newStudent.IsActive = true;
+
+            // Save student
+            var studentId = await Task.Run(() => Database.AddStudent(newStudent));
+
+            // Save all fingerprint templates
+            foreach (var template in capturedTemplates)
+            {
+                template.StudentId = studentId;
+                await Task.Run(() => Database.AddFingerprintTemplate(template));
+            }
+
+            captureMessage = "✓ Enrollment completed successfully!";
+            await Task.Delay(1500);
+
+            Navigation.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            captureMessage = $"❌ Error saving enrollment: {ex.Message}";
+            isSaving = false;
+        }
+    }
+}
+}

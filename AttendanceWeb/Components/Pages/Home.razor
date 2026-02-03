@@ -1,0 +1,509 @@
+﻿@page "/home"
+@using AttendanceWeb.Services
+@inject AttendanceDatabase Database
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Admin Home</PageTitle>
+
+@if (!AuthService.IsAdminAuthenticated)
+{
+    <div class="unauthorized-container">
+        <div class="unauthorized-card">
+            <div class="unauthorized-icon">🔒</div>
+            <h2>Access Denied</h2>
+            <p>You need to be logged in as an admin to access this page.</p>
+            <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/admin/login")'>
+                Go to Admin Login
+            </button>
+        </div>
+    </div>
+}
+else
+{
+<div class="home-container">
+    <div class="home-header">
+        <h1 class="page-title">Student Portal</h1>
+        <p class="page-subtitle">Welcome to Student Attendance System</p>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-content">
+                <div class="stat-label">Enrolled Students</div>
+                <div class="stat-value">@totalStudents</div>
+            </div>
+            <div class="stat-icon">
+                <span>👥</span>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-content">
+                <div class="stat-label">Active Events</div>
+                <div class="stat-value">@totalEvents</div>
+            </div>
+            <div class="stat-icon">
+                <span>📅</span>
+            </div>
+        </div>
+        
+        <div class="stat-card highlight">
+            <div class="stat-content">
+                <div class="stat-label">Today's Attendance</div>
+                <div class="stat-value">@todayAttendance</div>
+            </div>
+            <div class="stat-icon">
+                <span>✓</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="quick-actions">
+        <h2 class="section-title">Quick Actions</h2>
+        
+        <div class="action-grid">
+            <div class="action-card primary" @onclick='() => Navigation.NavigateTo("/attendance")'>
+                <div class="action-icon">👆</div>
+                <div class="action-content">
+                    <h3 class="action-title">Record Attendance</h3>
+                    <p class="action-description">Scan fingerprint to record Time In/Out</p>
+                </div>
+                <div class="action-arrow">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+            </div>
+
+            <div class="action-card secondary" @onclick='() => Navigation.NavigateTo("/enroll")'>
+                <div class="action-icon">➕</div>
+                <div class="action-content">
+                    <h3 class="action-title">Enroll Student</h3>
+                    <p class="action-description">Register new student with fingerprint</p>
+                </div>
+                <div class="action-arrow">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+            </div>
+
+            <div class="action-card" @onclick='() => Navigation.NavigateTo("/admin/login")'>
+                <div class="action-icon">🔐</div>
+                <div class="action-content">
+                    <h3 class="action-title">Admin Login</h3>
+                    <p class="action-description">Access admin dashboard and management tools</p>
+                </div>
+                <div class="action-arrow">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="features-section">
+        <div class="feature-item">
+            <div class="feature-icon">⚡</div>
+            <div class="feature-text">
+                <strong>Fast Identification</strong>
+                <span>2-3 seconds per scan</span>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">🔒</div>
+            <div class="feature-text">
+                <strong>Secure & Reliable</strong>
+                <span>5-sample enrollment</span>
+            </div>
+        </div>
+        <div class="feature-item">
+            <div class="feature-icon">💾</div>
+            <div class="feature-text">
+                <strong>Local Storage</strong>
+                <span>SQLite database</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .unauthorized-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-800) 100%);
+        padding: var(--space-6);
+    }
+
+    .unauthorized-card {
+        background: white;
+        border-radius: var(--radius-xl);
+        padding: var(--space-8);
+        max-width: 400px;
+        text-align: center;
+        box-shadow: var(--shadow-xl);
+    }
+
+    .unauthorized-icon {
+        font-size: 4rem;
+        margin-bottom: var(--space-4);
+    }
+
+    .unauthorized-card h2 {
+        color: var(--gray-900);
+        margin-bottom: var(--space-3);
+    }
+
+    .unauthorized-card p {
+        color: var(--gray-600);
+        margin-bottom: var(--space-6);
+    }
+
+    .home-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: var(--space-8);
+    }
+
+    .home-header {
+        margin-bottom: var(--space-8);
+    }
+
+    .page-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--neutral-900);
+        margin-bottom: var(--space-2);
+    }
+
+    .page-subtitle {
+        font-size: 1rem;
+        color: var(--neutral-600);
+        font-weight: 400;
+    }
+
+    .section-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--neutral-900);
+        margin-bottom: var(--space-5);
+    }
+
+    /* Stats Cards */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: var(--space-5);
+        margin-bottom: var(--space-10);
+    }
+
+    .stat-card {
+        background: white;
+        border: 1px solid var(--neutral-200);
+        border-radius: var(--radius-xl);
+        padding: var(--space-6);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        transition: all var(--transition-base);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .stat-card:hover {
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
+    }
+
+    .stat-card.highlight {
+        background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-700) 100%);
+        border-color: var(--primary-700);
+    }
+
+    .stat-card.highlight .stat-label,
+    .stat-card.highlight .stat-value {
+        color: white;
+    }
+
+    .stat-card.highlight .stat-icon span {
+        background: rgba(255, 255, 255, 0.2);
+    }
+
+    .stat-content {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+    }
+
+    .stat-label {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--neutral-600);
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+
+    .stat-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--neutral-900);
+        line-height: 1;
+    }
+
+    .stat-icon {
+        width: 64px;
+        height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .stat-icon span {
+        font-size: 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 64px;
+        height: 64px;
+        background: var(--neutral-100);
+        border-radius: var(--radius-lg);
+    }
+
+    /* Quick Actions */
+    .quick-actions {
+        margin-bottom: var(--space-10);
+    }
+
+    .action-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: var(--space-5);
+    }
+
+    .action-card {
+        background: white;
+        border: 1px solid var(--neutral-200);
+        border-radius: var(--radius-xl);
+        padding: var(--space-6);
+        display: flex;
+        align-items: start;
+        gap: var(--space-4);
+        cursor: pointer;
+        transition: all var(--transition-base);
+        position: relative;
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .action-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: var(--neutral-300);
+        transition: background var(--transition-base);
+    }
+
+    .action-card.primary::before {
+        background: var(--primary-600);
+    }
+
+    .action-card.secondary::before {
+        background: var(--info-500);
+    }
+
+    .action-card:hover {
+        box-shadow: var(--shadow-lg);
+        transform: translateY(-4px);
+        border-color: var(--primary-300);
+    }
+
+    .action-icon {
+        font-size: 2rem;
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--neutral-100);
+        border-radius: var(--radius-lg);
+        flex-shrink: 0;
+        transition: all var(--transition-base);
+    }
+
+    .action-card.primary .action-icon {
+        background: var(--primary-50);
+    }
+
+    .action-card.secondary .action-icon {
+        background: var(--info-50, #eff6ff);
+    }
+
+    .action-card:hover .action-icon {
+        transform: scale(1.1);
+    }
+
+    .action-content {
+        flex: 1;
+    }
+
+    .action-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--neutral-900);
+        margin-bottom: var(--space-2);
+    }
+
+    .action-description {
+        font-size: 0.875rem;
+        color: var(--neutral-600);
+        line-height: 1.5;
+        margin: 0;
+    }
+
+    .action-arrow {
+        color: var(--neutral-400);
+        transition: all var(--transition-base);
+        align-self: center;
+    }
+
+    .action-card:hover .action-arrow {
+        color: var(--primary-600);
+        transform: translateX(4px);
+    }
+
+    /* Features Section */
+    .features-section {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: var(--space-4);
+        padding: var(--space-6);
+        background: white;
+        border: 1px solid var(--neutral-200);
+        border-radius: var(--radius-xl);
+    }
+
+    .feature-item {
+        display: flex;
+        align-items: center;
+        gap: var(--space-4);
+        padding: var(--space-4);
+    }
+
+    .feature-icon {
+        font-size: 1.75rem;
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--primary-50);
+        border-radius: var(--radius-lg);
+        flex-shrink: 0;
+    }
+
+    .feature-text {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-1);
+    }
+
+    .feature-text strong {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--neutral-900);
+    }
+
+    .feature-text span {
+        font-size: 0.8125rem;
+        color: var(--neutral-600);
+    }
+
+    /* Responsive Design */
+    @@media (max-width: 1024px) {
+        .stats-grid {
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        }
+
+        .action-grid {
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .home-container {
+            padding: var(--space-5);
+        }
+
+        .page-title {
+            font-size: 1.75rem;
+        }
+
+        .stats-grid {
+            grid-template-columns: 1fr;
+            gap: var(--space-4);
+        }
+
+        .action-grid {
+            grid-template-columns: 1fr;
+            gap: var(--space-4);
+        }
+
+        .features-section {
+            grid-template-columns: 1fr;
+            gap: var(--space-3);
+            padding: var(--space-4);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+        }
+
+        .action-icon {
+            font-size: 1.5rem;
+            width: 40px;
+            height: 40px;
+        }
+    }
+</style>
+
+@code {
+    private int totalStudents = 0;
+    private int totalEvents = 0;
+    private int todayAttendance = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStatistics();
+    }
+
+    private async Task LoadStatistics()
+    {
+        try
+        {
+            var students = await Task.Run(() => Database.GetAllStudents());
+            totalStudents = students.Count;
+
+            var events = await Task.Run(() => Database.GetAllEvents());
+            totalEvents = events.Count;
+
+            var currentEvent = await Task.Run(() => Database.GetCurrentEvent());
+            if (currentEvent != null)
+            {
+                var attendance = await Task.Run(() => Database.GetEventAttendance(currentEvent.Id));
+                todayAttendance = attendance.Count;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading statistics: {ex.Message}");
+        }
+    }
+}
+}
