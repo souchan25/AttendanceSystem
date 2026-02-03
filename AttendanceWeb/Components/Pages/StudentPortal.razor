@@ -422,8 +422,7 @@
 
         await Task.Delay(100); // Small delay for smooth UI
 
-        activeEvents = Database.GetAllEvents()
-            .Where(e => e.IsActive)
+        activeEvents = Database.GetActiveEvents()
             .OrderByDescending(e => e.EventDate)
             .ToList();
 

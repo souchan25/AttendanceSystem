@@ -332,6 +332,9 @@ namespace AttendanceWeb.Services
 
         public List<Event> GetActiveEvents()
         {
+            // Auto-deactivate expired events first
+            AutoDeactivateExpiredEvents();
+            
             var events = new List<Event>();
             using var conn = GetConnection();
             var sql = "SELECT * FROM Events WHERE IsActive = 1 ORDER BY EventDate DESC";
@@ -361,6 +364,9 @@ namespace AttendanceWeb.Services
 
         public Event? GetCurrentEvent()
         {
+            // Auto-deactivate expired events first
+            AutoDeactivateExpiredEvents();
+            
             using var conn = GetConnection();
             var sql = @"SELECT * FROM Events 
                        WHERE IsActive = 1 AND date(EventDate) = date('now')
@@ -674,6 +680,57 @@ namespace AttendanceWeb.Services
                 });
             }
             return admins;
+        }
+
+        // Auto-deactivate events where TimeOut has passed
+        private void AutoDeactivateExpiredEvents()
+        {
+            using var conn = GetConnection();
+            
+            // Get all active events
+            var sql = "SELECT * FROM Events WHERE IsActive = 1";
+            using var cmd = new SqliteCommand(sql, conn);
+            using var reader = cmd.ExecuteReader();
+            
+            var expiredEventIds = new List<int>();
+            
+            while (reader.Read())
+            {
+                var eventId = reader.GetInt32(0);
+                var eventDate = DateTime.Parse(reader.GetString(3));
+                var timeOutEnd = reader.FieldCount > 10 && !reader.IsDBNull(10) ? reader.GetString(10) : null;
+                
+                // If event has a TimeOutEnd, check if it has passed
+                if (!string.IsNullOrEmpty(timeOutEnd))
+                {
+                    if (TimeSpan.TryParse(timeOutEnd, out var timeOut))
+                    {
+                        var eventEndDateTime = eventDate.Date.Add(timeOut);
+                        
+                        // If current time is past the event's timeout, mark for deactivation
+                        if (DateTime.Now > eventEndDateTime)
+                        {
+                            expiredEventIds.Add(eventId);
+                        }
+                    }
+                }
+                // If no TimeOutEnd is set, deactivate if event date has passed
+                else if (eventDate.Date < DateTime.Now.Date)
+                {
+                    expiredEventIds.Add(eventId);
+                }
+            }
+            
+            reader.Close();
+            
+            // Deactivate expired events
+            foreach (var eventId in expiredEventIds)
+            {
+                var updateSql = "UPDATE Events SET IsActive = 0 WHERE Id = @id";
+                using var updateCmd = new SqliteCommand(updateSql, conn);
+                updateCmd.Parameters.AddWithValue("@id", eventId);
+                updateCmd.ExecuteNonQuery();
+            }
         }
 
         public void Dispose()
