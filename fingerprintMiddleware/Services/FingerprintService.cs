@@ -116,20 +116,35 @@ namespace FingerprintMiddleware.Services
                     resolution = caps.Resolutions[0];
                 }
 
-                // Use the four parameter version of Capture with the proper resolution parameter
-                var captureResult = await Task.Run(() => _selectedReader.Capture(
-                    Constants.Formats.Fid.ANSI, 
-                    Constants.CaptureProcessing.DP_IMG_PROC_DEFAULT, 
-                    resolution, 
-                    resolution));
+                CaptureResult captureResult = null;
+                var startTime = DateTime.Now;
+                var timeout = TimeSpan.FromSeconds(30);
+
+                // Wait loop for finger placement
+                while (DateTime.Now - startTime < timeout)
+                {
+                    captureResult = await Task.Run(() => _selectedReader.Capture(
+                        Constants.Formats.Fid.ANSI, 
+                        Constants.CaptureProcessing.DP_IMG_PROC_DEFAULT, 
+                        resolution, 
+                        resolution));
+                    
+                    if (captureResult.ResultCode == Constants.ResultCode.DP_SUCCESS && captureResult.Data != null)
+                    {
+                        break; // Successfully captured
+                    }
+                    
+                    // If not successful, wait a bit before retrying
+                    await Task.Delay(200);
+                }
                 
-                if (captureResult.Data == null || captureResult.ResultCode != Constants.ResultCode.DP_SUCCESS)
+                if (captureResult == null || captureResult.Data == null || captureResult.ResultCode != Constants.ResultCode.DP_SUCCESS)
                 {
                     return new FingerprintResponse
                     {
                         Success = false,
-                        Message = "Failed to capture fingerprint.",
-                        Error = $"Capture error: {captureResult.ResultCode}"
+                        Message = "Timeout or failed to capture fingerprint.",
+                        Error = captureResult != null ? $"Capture error: {captureResult.ResultCode}" : "Timeout"
                     };
                 }
 

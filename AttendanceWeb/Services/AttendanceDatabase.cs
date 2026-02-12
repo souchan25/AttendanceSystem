@@ -3,10 +3,9 @@ using AttendanceWeb.Models;
 
 namespace AttendanceWeb.Services
 {
-    public class AttendanceDatabase : IDisposable
+    public class AttendanceDatabase
     {
         private readonly string _connectionString;
-        private SqliteConnection? _connection;
 
         public AttendanceDatabase()
         {
@@ -16,18 +15,16 @@ namespace AttendanceWeb.Services
             
             var dbPath = Path.Combine(appFolder, "attendance.db");
             _connectionString = $"Data Source={dbPath}";
-            
+            Console.WriteLine($"[AttendanceDatabase] Initialized with path: {dbPath}");
+
             InitializeDatabase();
         }
 
         private SqliteConnection GetConnection()
         {
-            if (_connection == null || _connection.State != System.Data.ConnectionState.Open)
-            {
-                _connection = new SqliteConnection(_connectionString);
-                _connection.Open();
-            }
-            return _connection;
+            var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+            return connection;
         }
 
         private void InitializeDatabase()
@@ -146,7 +143,7 @@ namespace AttendanceWeb.Services
                     Name = reader.GetString(2),
                     Email = reader.IsDBNull(3) ? "" : reader.GetString(3),
                     Program = reader.IsDBNull(4) ? "" : reader.GetString(4),
-                    YearLevel = reader.GetInt32(5),
+                    YearLevel = reader.IsDBNull(5) ? 0 : reader.GetInt32(5),
                     EnrolledDate = DateTime.Parse(reader.GetString(6)),
                     IsActive = reader.GetInt32(7) == 1
                 };
@@ -172,7 +169,7 @@ namespace AttendanceWeb.Services
                     Name = reader.GetString(2),
                     Email = reader.IsDBNull(3) ? "" : reader.GetString(3),
                     Program = reader.IsDBNull(4) ? "" : reader.GetString(4),
-                    YearLevel = reader.GetInt32(5),
+                    YearLevel = reader.IsDBNull(5) ? 0 : reader.GetInt32(5),
                     EnrolledDate = DateTime.Parse(reader.GetString(6)),
                     IsActive = reader.GetInt32(7) == 1
                 };
@@ -198,7 +195,7 @@ namespace AttendanceWeb.Services
                     Name = reader.GetString(2),
                     Email = reader.IsDBNull(3) ? "" : reader.GetString(3),
                     Program = reader.IsDBNull(4) ? "" : reader.GetString(4),
-                    YearLevel = reader.GetInt32(5),
+                    YearLevel = reader.IsDBNull(5) ? 0 : reader.GetInt32(5),
                     EnrolledDate = DateTime.Parse(reader.GetString(6)),
                     IsActive = reader.GetInt32(7) == 1
                 });
@@ -497,38 +494,169 @@ namespace AttendanceWeb.Services
         }
 
         // Attendance Operations
-        public void RecordTimeIn(int studentId, int eventId)
+        public (bool Success, string Message) RecordTimeIn(int studentId, int eventId)
         {
-            using var conn = GetConnection();
-            var sql = @"INSERT OR REPLACE INTO AttendanceRecords 
-                       (StudentId, EventId, TimeIn, RecordDate, Status)
-                       VALUES (@StudentId, @EventId, @TimeIn, @RecordDate, @Status)";
+            Console.WriteLine($"[RecordTimeIn] Attempting Time In for Student {studentId}, Event {eventId}");
+            var evt = GetEvent(eventId);
+            if (evt == null) 
+            {
+                Console.WriteLine("[RecordTimeIn] Event not found!");
+                return (false, "Event not found.");
+            }
+
+            var now = DateTime.Now;
             
-            using var cmd = new SqliteCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@StudentId", studentId);
-            cmd.Parameters.AddWithValue("@EventId", eventId);
-            cmd.Parameters.AddWithValue("@TimeIn", DateTime.Now.ToString("o"));
-            cmd.Parameters.AddWithValue("@RecordDate", DateTime.Now.ToString("yyyy-MM-dd"));
-            cmd.Parameters.AddWithValue("@Status", "Present");
+            // Strict Time Validation for Time In
+            if (!string.IsNullOrEmpty(evt.TimeInStart))
+            {
+                if (TryGetEventTime(evt.EventDate, evt.TimeInStart, out var startDate))
+                {
+                    if (now < startDate) return (false, $"Too early for Time In. Starts at {evt.TimeInStart}");
+                }
+            }
             
-            cmd.ExecuteNonQuery();
+            if (!string.IsNullOrEmpty(evt.TimeInEnd))
+            {
+                if (TryGetEventTime(evt.EventDate, evt.TimeInEnd, out var endDate))
+                {
+                     if (now > endDate) return (false, $"Late! Time In deadline was {evt.TimeInEnd}");
+                }
+            }
+
+            try 
+            {
+                using var conn = GetConnection();
+                
+                // Try Update First (Upsert logic to preserve TimeOut if it exists)
+                var updateSql = @"UPDATE AttendanceRecords 
+                                 SET TimeIn = @TimeIn, Status = @Status
+                                 WHERE StudentId = @StudentId AND EventId = @EventId AND RecordDate = @RecordDate";
+                
+                using var updateCmd = new SqliteCommand(updateSql, conn);
+                updateCmd.Parameters.AddWithValue("@StudentId", studentId);
+                updateCmd.Parameters.AddWithValue("@EventId", eventId);
+                updateCmd.Parameters.AddWithValue("@RecordDate", now.ToString("yyyy-MM-dd"));
+                updateCmd.Parameters.AddWithValue("@TimeIn", now.ToString("o"));
+                updateCmd.Parameters.AddWithValue("@Status", "Present");
+                
+                int rows = updateCmd.ExecuteNonQuery();
+                Console.WriteLine($"[RecordTimeIn] Update affected {rows} rows.");
+
+                if (rows == 0)
+                {
+                    // Update failed (no record), so Insert
+                    var insertSql = @"INSERT INTO AttendanceRecords 
+                           (StudentId, EventId, TimeIn, RecordDate, Status)
+                           VALUES (@StudentId, @EventId, @TimeIn, @RecordDate, @Status)";
+                    
+                    using var insertCmd = new SqliteCommand(insertSql, conn);
+                    insertCmd.Parameters.AddWithValue("@StudentId", studentId);
+                    insertCmd.Parameters.AddWithValue("@EventId", eventId);
+                    insertCmd.Parameters.AddWithValue("@TimeIn", now.ToString("o"));
+                    insertCmd.Parameters.AddWithValue("@RecordDate", now.ToString("yyyy-MM-dd"));
+                    insertCmd.Parameters.AddWithValue("@Status", "Present");
+                    
+                    insertCmd.ExecuteNonQuery();
+                    Console.WriteLine("[RecordTimeIn] Inserted new record.");
+                    
+                    // Count as 1 row change for the check below
+                    rows = 1;
+                }
+                
+                if (rows == 0)
+                {
+                     return (false, "Database insert/update failed (0 rows affected).");
+                }
+
+                // Verification
+                using var verifyCmd = new SqliteCommand("SELECT COUNT(*) FROM AttendanceRecords", conn);
+                var count = Convert.ToInt64(verifyCmd.ExecuteScalar());
+                Console.WriteLine($"[RecordTimeIn] Total records in DB: {count}");
+                
+                if (count == 0)
+                {
+                    return (false, "Critical Error: Record was not saved to database.");
+                }
+
+                return (true, "Time In Recorded");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[RecordTimeIn] Exception: {ex}");
+                return (false, $"Error: {ex.Message}");
+            }
         }
 
-        public void RecordTimeOut(int studentId, int eventId)
+        public (bool Success, string Message) RecordTimeOut(int studentId, int eventId)
         {
-            using var conn = GetConnection();
-            var sql = @"UPDATE AttendanceRecords 
-                       SET TimeOut = @TimeOut
-                       WHERE StudentId = @StudentId AND EventId = @EventId 
-                       AND RecordDate = @RecordDate";
+            Console.WriteLine($"[RecordTimeOut] Attempting Time Out for Student {studentId}, Event {eventId}");
+            var evt = GetEvent(eventId);
+            if (evt == null) return (false, "Event not found.");
+
+            var now = DateTime.Now;
             
-            using var cmd = new SqliteCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@TimeOut", DateTime.Now.ToString("o"));
-            cmd.Parameters.AddWithValue("@StudentId", studentId);
-            cmd.Parameters.AddWithValue("@EventId", eventId);
-            cmd.Parameters.AddWithValue("@RecordDate", DateTime.Now.ToString("yyyy-MM-dd"));
+            // Strict Time Validation for Time Out
+            if (!string.IsNullOrEmpty(evt.TimeOutStart))
+            {
+                if (TryGetEventTime(evt.EventDate, evt.TimeOutStart, out var startDate))
+                {
+                    if (now < startDate) return (false, $"Too early for Time Out. Starts at {evt.TimeOutStart}");
+                }
+            }
             
-            cmd.ExecuteNonQuery();
+            if (!string.IsNullOrEmpty(evt.TimeOutEnd))
+            {
+                if (TryGetEventTime(evt.EventDate, evt.TimeOutEnd, out var endDate))
+                {
+                    if (now > endDate) return (false, $"Late! Time Out deadline was {evt.TimeOutEnd}");
+                }
+            }
+
+            try
+            {
+                using var conn = GetConnection();
+                
+                // Try to UPDATE existing record first (if Time In exists)
+                var updateSql = @"UPDATE AttendanceRecords 
+                           SET TimeOut = @TimeOut
+                           WHERE StudentId = @StudentId AND EventId = @EventId 
+                           AND RecordDate = @RecordDate";
+                
+                using var updateCmd = new SqliteCommand(updateSql, conn);
+                updateCmd.Parameters.AddWithValue("@TimeOut", now.ToString("o"));
+                updateCmd.Parameters.AddWithValue("@StudentId", studentId);
+                updateCmd.Parameters.AddWithValue("@EventId", eventId);
+                updateCmd.Parameters.AddWithValue("@RecordDate", now.ToString("yyyy-MM-dd"));
+                
+                int rows = updateCmd.ExecuteNonQuery();
+                Console.WriteLine($"[RecordTimeOut] Update affected {rows} rows.");
+
+                if (rows == 0)
+                {
+                    // No record exists (Student didn't Time In), so INSERT new record
+                    Console.WriteLine("[RecordTimeOut] No existing record found. Inserting new record.");
+                    
+                    var insertSql = @"INSERT INTO AttendanceRecords 
+                               (StudentId, EventId, TimeOut, RecordDate, Status)
+                               VALUES (@StudentId, @EventId, @TimeOut, @RecordDate, @Status)";
+                    
+                    using var insertCmd = new SqliteCommand(insertSql, conn);
+                    insertCmd.Parameters.AddWithValue("@StudentId", studentId);
+                    insertCmd.Parameters.AddWithValue("@EventId", eventId);
+                    insertCmd.Parameters.AddWithValue("@TimeOut", now.ToString("o"));
+                    insertCmd.Parameters.AddWithValue("@RecordDate", now.ToString("yyyy-MM-dd"));
+                    insertCmd.Parameters.AddWithValue("@Status", "Present");
+                    
+                    insertCmd.ExecuteNonQuery();
+                }
+                
+                return (true, "Time Out Recorded");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[RecordTimeOut] Error: {ex}");
+                return (false, $"Error: {ex.Message}");
+            }
         }
 
         public AttendanceRecord? GetTodayAttendance(int studentId, int eventId)
@@ -599,7 +727,7 @@ namespace AttendanceWeb.Services
                         Name = reader.GetString(9),
                         Email = reader.IsDBNull(10) ? "" : reader.GetString(10),
                         Program = reader.IsDBNull(11) ? "" : reader.GetString(11),
-                        YearLevel = reader.GetInt32(12),
+                        YearLevel = reader.IsDBNull(12) ? 0 : reader.GetInt32(12),
                         EnrolledDate = DateTime.Parse(reader.GetString(13)),
                         IsActive = reader.GetInt32(14) == 1
                     },
@@ -616,24 +744,32 @@ namespace AttendanceWeb.Services
         public List<AttendanceRecord> GetAllAttendanceRecords()
         {
             var records = new List<AttendanceRecord>();
-            using var conn = GetConnection();
-            var sql = "SELECT * FROM AttendanceRecords ORDER BY RecordDate DESC";
-            
-            using var cmd = new SqliteCommand(sql, conn);
-            using var reader = cmd.ExecuteReader();
-            
-            while (reader.Read())
+            try 
             {
-                records.Add(new AttendanceRecord
+                using var conn = GetConnection();
+                var sql = "SELECT * FROM AttendanceRecords ORDER BY RecordDate DESC";
+                
+                using var cmd = new SqliteCommand(sql, conn);
+                using var reader = cmd.ExecuteReader();
+                
+                while (reader.Read())
                 {
-                    Id = reader.GetInt32(0),
-                    StudentId = reader.GetInt32(1),
-                    EventId = reader.GetInt32(2),
-                    TimeIn = reader.IsDBNull(3) ? null : DateTime.Parse(reader.GetString(3)),
-                    TimeOut = reader.IsDBNull(4) ? null : DateTime.Parse(reader.GetString(4)),
-                    Status = reader.IsDBNull(5) ? "" : reader.GetString(5),
-                    RecordDate = DateTime.Parse(reader.GetString(6))
-                });
+                    records.Add(new AttendanceRecord
+                    {
+                        Id = reader.GetInt32(0),
+                        StudentId = reader.GetInt32(1),
+                        EventId = reader.GetInt32(2),
+                        TimeIn = reader.IsDBNull(3) ? null : DateTime.Parse(reader.GetString(3)),
+                        TimeOut = reader.IsDBNull(4) ? null : DateTime.Parse(reader.GetString(4)),
+                        Status = reader.IsDBNull(5) ? "" : reader.GetString(5),
+                        RecordDate = DateTime.Parse(reader.GetString(6))
+                    });
+                }
+                Console.WriteLine($"[GetAllAttendanceRecords] Returning {records.Count} records");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[GetAllAttendanceRecords] Error: {ex.Message}");
             }
             return records;
         }
@@ -703,10 +839,25 @@ namespace AttendanceWeb.Services
                 // If event has a TimeOutEnd, check if it has passed
                 if (!string.IsNullOrEmpty(timeOutEnd))
                 {
-                    if (TimeSpan.TryParse(timeOutEnd, out var timeOut))
+                    DateTime eventEndDateTime;
+                    bool parsed = false;
+
+                    // Try combining Date + Time string (handles both "HH:mm" and "hh:mm tt")
+                    string combinedString = $"{eventDate:yyyy-MM-dd} {timeOutEnd}";
+                    
+                    if (DateTime.TryParse(combinedString, out eventEndDateTime))
                     {
-                        var eventEndDateTime = eventDate.Date.Add(timeOut);
-                        
+                        parsed = true;
+                    }
+                    else if (TimeSpan.TryParse(timeOutEnd, out var timeOut))
+                    {
+                        // Fallback for simple time formats
+                        eventEndDateTime = eventDate.Date.Add(timeOut);
+                        parsed = true;
+                    }
+
+                    if (parsed)
+                    {
                         // If current time is past the event's timeout, mark for deactivation
                         if (DateTime.Now > eventEndDateTime)
                         {
@@ -733,9 +884,26 @@ namespace AttendanceWeb.Services
             }
         }
 
-        public void Dispose()
+        private bool TryGetEventTime(DateTime eventDate, string? timeString, out DateTime result)
         {
-            _connection?.Dispose();
+            result = DateTime.MinValue;
+            if (string.IsNullOrEmpty(timeString)) return false;
+
+            // Try combining Date + Time string (handles both "HH:mm" and "hh:mm tt")
+            string combinedString = $"{eventDate:yyyy-MM-dd} {timeString}";
+            
+            if (DateTime.TryParse(combinedString, out result))
+            {
+                return true;
+            }
+            
+            if (TimeSpan.TryParse(timeString, out var timeSpan))
+            {
+                result = eventDate.Date.Add(timeSpan);
+                return true;
+            }
+
+            return false;
         }
     }
 }

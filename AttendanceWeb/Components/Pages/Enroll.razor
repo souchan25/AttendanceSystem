@@ -27,7 +27,7 @@ else
 <div class="page-container">
     <div class="content-card">
         <div class="page-header">
-            <button class="btn-back" @onclick='() => Navigation.NavigateTo("/")'>← Back</button>
+            <button class="btn-back" @onclick='() => Navigation.NavigateTo("/admin/dashboard")'>← Back</button>
             <h1>🎓 Student Enrollment</h1>
             <p>Register new student with 5 fingerprint samples</p>
         </div>
@@ -570,7 +570,7 @@ else
             captureMessage = "✓ Enrollment completed successfully!";
             await Task.Delay(1500);
 
-            Navigation.NavigateTo("/");
+            Navigation.NavigateTo("/admin/dashboard");
         }
         catch (Exception ex)
         {

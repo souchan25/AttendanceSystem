@@ -17,7 +17,17 @@
                 ← Back to Events
             </button>
             <h1 class="title">🎓 ATTENDANCE PORTAL</h1>
-            <p class="subtitle">@currentEvent?.EventName (@currentEvent?.Period - @currentEvent?.AcademicYear)</p>
+            <p class="subtitle">
+                @currentEvent?.EventName (@currentEvent?.Period - @currentEvent?.AcademicYear)
+                @if (currentEvent != null)
+                {
+                    <br/>
+                    <span style="font-size: 0.8em; opacity: 0.8;">
+                        @if(!string.IsNullOrEmpty(currentEvent.TimeInStart)) { <span>Time In: @currentEvent.TimeInStart - @currentEvent.TimeInEnd</span> }
+                        @if(!string.IsNullOrEmpty(currentEvent.TimeOutStart)) { <span style="margin-left: 10px;">Time Out: @currentEvent.TimeOutStart - @currentEvent.TimeOutEnd</span> }
+                    </span>
+                }
+            </p>
         </div>
         <div class="header-right">
             <button class="btn btn-reinit" @onclick="HandleReinitialize" title="Reinitialize Scanner">
@@ -621,17 +631,35 @@
 
             if (timeIn)
             {
-                Database.RecordTimeIn(student.Id, currentEvent.Id);
-                statusMessage = $"✅ TIME IN RECORDED";
-                statusHint = $"Welcome, {student.Name}! You can view your records.";
-                showRecordsOption = true;
+                var result = Database.RecordTimeIn(student.Id, currentEvent.Id);
+                if (result.Success)
+                {
+                    statusMessage = $"✅ TIME IN RECORDED";
+                    statusHint = $"Welcome, {student.Name}! You can view your records.";
+                    showRecordsOption = true;
+                }
+                else
+                {
+                    statusMessage = $"❌ TIME IN FAILED";
+                    statusHint = result.Message;
+                    showRecordsOption = false;
+                }
             }
             else
             {
-                Database.RecordTimeOut(student.Id, currentEvent.Id);
-                statusMessage = $"✅ TIME OUT RECORDED";
-                statusHint = $"Goodbye, {student.Name}! You can view your records.";
-                showRecordsOption = true;
+                var result = Database.RecordTimeOut(student.Id, currentEvent.Id);
+                if (result.Success)
+                {
+                    statusMessage = $"✅ TIME OUT RECORDED";
+                    statusHint = $"Goodbye, {student.Name}! You can view your records.";
+                    showRecordsOption = true;
+                }
+                else
+                {
+                    statusMessage = $"❌ TIME OUT FAILED";
+                    statusHint = result.Message;
+                    showRecordsOption = false;
+                }
             }
         }
         catch (Exception ex)
