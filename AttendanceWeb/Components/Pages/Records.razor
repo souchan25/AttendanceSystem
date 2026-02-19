@@ -111,6 +111,7 @@ else
                             <tr>
                                 <th>Student ID</th>
                                 <th>Name</th>
+                                <th>Section</th>
                                 <th>Event</th>
                                 <th>Time In</th>
                                 <th>Time Out</th>
@@ -123,6 +124,7 @@ else
                                 <tr>
                                     <td>@record.Student.StudentId</td>
                                     <td>@record.Student.Name</td>
+                                    <td>@(record.Student.Section ?? "-")</td>
                                     <td>@record.Event.EventName</td>
                                     <td>
                                         @if (record.Record.TimeIn.HasValue)

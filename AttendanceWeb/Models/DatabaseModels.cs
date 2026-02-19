@@ -9,6 +9,7 @@ namespace AttendanceWeb.Models
         public string Email { get; set; } = "";
         public string Program { get; set; } = "";
         public int YearLevel { get; set; }
+        public string Section { get; set; } = ""; // Added Section (A-E)
         public DateTime EnrolledDate { get; set; }
         public bool IsActive { get; set; } = true;
     }
@@ -43,21 +44,23 @@ namespace AttendanceWeb.Models
         public string Period { get; set; } = ""; // Midterm, Final
         public string AcademicYear { get; set; } = "";
         
-        // Time windows for attendance (stored as strings in HH:mm format)
-        public string? TimeInStart { get; set; }
-        public string? TimeInEnd { get; set; }
-        public string? TimeOutStart { get; set; }
-        public string? TimeOutEnd { get; set; }
+        // Time windows for attendance
+        public TimeOnly? TimeInStart { get; set; }
+        public TimeOnly? TimeInEnd { get; set; }
+        public TimeOnly? TimeOutStart { get; set; }
+        public TimeOnly? TimeOutEnd { get; set; }
         
         public bool IsActive { get; set; } = true;
+        public bool IsDeleted { get; set; } = false;
     }
 
     public class Admin
     {
         public int Id { get; set; }
         public string Username { get; set; } = "";
+        public string Password { get; set; } = ""; // Added password field
         public string Name { get; set; } = "";
-        public string TemplateData { get; set; } = ""; // Admin fingerprint
+        public string TemplateData { get; set; } = ""; // Admin fingerprint (optional now)
         public DateTime CreatedDate { get; set; }
     }
 

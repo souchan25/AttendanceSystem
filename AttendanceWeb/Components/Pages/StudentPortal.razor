@@ -12,11 +12,11 @@
 <div class="portal-container">
     <div class="portal-header">
         <div class="header-controls">
-            <button class="btn btn-reinit" @onclick="HandleReinitialize" disabled="@isInitializing">
-                <span class="icon">@((isInitializing) ? "⏳" : "🔄")</span> 
-                @((isInitializing) ? "RESETTING..." : "RESET SCANNER")
-            </button>
-            @if (!string.IsNullOrEmpty(statusMessage))
+            @if (isInitializing)
+            {
+                <span class="status-msg">🔄 Initializing Scanner...</span>
+            }
+            else if (!string.IsNullOrEmpty(statusMessage))
             {
                 <span class="status-msg">@statusMessage</span>
             }
@@ -80,17 +80,17 @@
                                 <p class="event-description">@evt.Description</p>
                             }
 
-                            @if (!string.IsNullOrEmpty(evt.TimeInStart) || !string.IsNullOrEmpty(evt.TimeOutStart))
+                            @if (evt.TimeInStart.HasValue || evt.TimeOutStart.HasValue)
                             {
                                 <div class="time-info">
-                                    @if (!string.IsNullOrEmpty(evt.TimeInStart))
+                                    @if (evt.TimeInStart.HasValue)
                                     {
                                         <div class="time-slot">
                                             <span class="time-label">⬇️ Time In:</span>
                                             <span class="time-range">@evt.TimeInStart - @evt.TimeInEnd</span>
                                         </div>
                                     }
-                                    @if (!string.IsNullOrEmpty(evt.TimeOutStart))
+                                    @if (evt.TimeOutStart.HasValue)
                                     {
                                         <div class="time-slot">
                                             <span class="time-label">⬆️ Time Out:</span>
@@ -468,6 +468,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Auto-refresh scanner on load
+        _ = HandleReinitialize();
         await LoadActiveEvents();
     }
 

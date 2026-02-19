@@ -1,14 +1,14 @@
 ﻿@inherits LayoutComponentBase
+@inject IJSRuntime JSRuntime
 
 <div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
-
     <main>
         <div class="top-row px-4">
             <div class="header-info">
                 <span class="system-name">Attendance Management</span>
+                <button class="btn-fullscreen" @onclick="ToggleFullScreen" title="Toggle Full Screen">
+                    ⛶
+                </button>
             </div>
         </div>
 
@@ -23,3 +23,26 @@
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    private async Task ToggleFullScreen()
+    {
+        await JSRuntime.InvokeVoidAsync("eval", "if (!document.fullscreenElement) { document.documentElement.requestFullscreen(); } else { if (document.exitFullscreen) { document.exitFullscreen(); } }");
+    }
+}
+
+<style>
+    .btn-fullscreen {
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        cursor: pointer;
+        padding: 5px 10px;
+        border-radius: 5px;
+        transition: background 0.2s;
+        margin-left: 10px;
+    }
+    .btn-fullscreen:hover {
+        background-color: rgba(0,0,0,0.05);
+    }
+</style>

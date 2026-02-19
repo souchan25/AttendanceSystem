@@ -23,20 +23,18 @@
                 {
                     <br/>
                     <span style="font-size: 0.8em; opacity: 0.8;">
-                        @if(!string.IsNullOrEmpty(currentEvent.TimeInStart)) { <span>Time In: @currentEvent.TimeInStart - @currentEvent.TimeInEnd</span> }
-                        @if(!string.IsNullOrEmpty(currentEvent.TimeOutStart)) { <span style="margin-left: 10px;">Time Out: @currentEvent.TimeOutStart - @currentEvent.TimeOutEnd</span> }
+                        @if(currentEvent.TimeInStart.HasValue) { <span>Time In: @currentEvent.TimeInStart - @currentEvent.TimeInEnd</span> }
+                        @if(currentEvent.TimeOutStart.HasValue) { <span style="margin-left: 10px;">Time Out: @currentEvent.TimeOutStart - @currentEvent.TimeOutEnd</span> }
                     </span>
                 }
             </p>
         </div>
+
         <div class="header-right">
-            <button class="btn btn-reinit" @onclick="HandleReinitialize" title="Reinitialize Scanner">
-                <span class="icon">🔄</span> RESET
-            </button>
-            @if (identifiedStudent != null && showRecordsOption)
+            @if (identifiedStudent != null)
             {
-                <button class="btn btn-my-records" @onclick='() => Navigation.NavigateTo("/myrecords")'>
-                    <span class="icon">📊</span> MY RECORDS
+                <button class="btn btn-my-records" @onclick='() => Navigation.NavigateTo($"/myrecords/{identifiedStudent.Id}")'>
+                    <span class="icon">📊</span> VIEW RECORDS
                 </button>
             }
         </div>

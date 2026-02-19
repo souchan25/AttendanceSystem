@@ -2,9 +2,9 @@
 @using AttendanceWeb.Models
 @using AttendanceWeb.Services
 @inject AttendanceDatabase Database
-@inject FingerprintApiClient ApiClient
 @inject AuthService AuthService
 @inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 
 <PageTitle>Admin Login</PageTitle>
@@ -13,81 +13,27 @@
     <div class="login-card">
         <div class="login-header">
             <h1>🔐 Admin Login</h1>
-            <p>Authenticate with your fingerprint</p>
+            <p>Enter your credentials</p>
         </div>
 
-        @if (admins.Count == 0)
+        @if (!string.IsNullOrEmpty(errorMessage))
         {
-            <div class="alert alert-info">
-                ℹ️ No admin accounts found. Please register an admin first.
-            </div>
-            <button class="btn btn-primary btn-block" @onclick='() => Navigation.NavigateTo("/admin/register")'>
-                Register First Admin
-            </button>
-            <div class="login-footer">
-                <button class="btn btn-link" @onclick='() => Navigation.NavigateTo("/")'>
-                    ← Back to Student Portal
-                </button>
-            </div>
+            <div class="alert alert-error">⚠️ @errorMessage</div>
         }
-        else
-        {
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="alert alert-error">⚠️ @errorMessage</div>
-            }
 
-            @if (!string.IsNullOrEmpty(successMessage))
-            {
-                <div class="alert alert-success">✓ @successMessage</div>
-            }
+        <div class="form-group">
+            <label>Username</label>
+            <input class="form-control" @bind="username" placeholder="Enter username" />
+        </div>
+        
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" class="form-control" @bind="password" placeholder="Enter password" @onkeypress="HandleKeyPress" />
+        </div>
 
-            <div class="fingerprint-section">
-                <div class="fingerprint-icon">
-                    <span style="font-size: 80px;">@(isCapturing ? "👆" : "🖐️")</span>
-                </div>
-
-                @if (isCapturing)
-                {
-                    <p class="status-text">Place your finger on the scanner...</p>
-                    <div class="loading-spinner"></div>
-                }
-                else
-                {
-                    <button class="btn btn-primary btn-large" @onclick="StartCapture">
-                        Scan Fingerprint
-                    </button>
-                }
-
-                @if (capturedTemplate != null)
-                {
-                    <div class="fingerprint-preview">
-                        <p>✓ Fingerprint captured</p>
-                        <p class="quality-text">Quality: @capturedTemplate.Quality%</p>
-                    </div>
-                }
-            </div>
-
-            @if (capturedTemplate != null)
-            {
-                <button class="btn btn-primary btn-block" @onclick="VerifyAdmin" disabled="@isVerifying">
-                    @(isVerifying ? "Verifying..." : "Login")
-                </button>
-            }
-
-            <div class="login-footer">
-                <button class="btn btn-link" @onclick='() => Navigation.NavigateTo("/")'>
-                    ← Back to Student Portal
-                </button>
-                @if (admins.Count > 0)
-                {
-                    <span class="separator">|</span>
-                    <button class="btn btn-link" @onclick='() => Navigation.NavigateTo("/admin/register")'>
-                        Add Admin
-                    </button>
-                }
-            </div>
-        }
+        <button class="btn btn-primary btn-block" @onclick="LoginWithPassword" disabled="@isLoading">
+            @(isLoading ? "Logging in..." : "Login")
+        </button>
     </div>
 </div>
 
@@ -98,251 +44,149 @@
         align-items: center;
         justify-content: center;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 20px;
     }
-
+    
     .login-card {
         background: white;
-        border-radius: 20px;
-        padding: 40px;
-        max-width: 500px;
+        padding: 2rem;
+        border-radius: 15px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
         width: 100%;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        max-width: 400px;
     }
-
+    
     .login-header {
         text-align: center;
-        margin-bottom: 30px;
+        margin-bottom: 2rem;
     }
-
+    
     .login-header h1 {
-        color: #333;
-        margin-bottom: 10px;
+        color: #2d3748;
+        font-size: 1.8rem;
+        margin-bottom: 0.5rem;
     }
-
-    .login-header p {
-        color: #666;
+    
+    .form-group {
+        margin-bottom: 1.5rem;
     }
-
-    .fingerprint-section {
-        text-align: center;
-        padding: 40px 20px;
-        background: #f8f9fa;
-        border-radius: 15px;
-        margin-bottom: 20px;
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        color: #4a5568;
+        font-weight: 500;
     }
-
-    .fingerprint-icon {
-        margin-bottom: 20px;
-        animation: pulse 2s infinite;
+    
+    .form-control {
+        width: 100%;
+        padding: 0.75rem;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 1rem;
+        transition: border-color 0.2s;
     }
-
-    @@keyframes pulse {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.05); }
+    
+    .form-control:focus {
+        border-color: #667eea;
+        outline: none;
     }
-
-    .status-text {
-        color: #667eea;
-        font-weight: 600;
-        margin-bottom: 15px;
-    }
-
-    .loading-spinner {
-        border: 4px solid #f3f3f3;
-        border-top: 4px solid #667eea;
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        animation: spin 1s linear infinite;
-        margin: 0 auto;
-    }
-
-    @@keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-
-    .fingerprint-preview {
-        margin-top: 20px;
-        padding: 15px;
-        background: white;
-        border-radius: 10px;
-    }
-
-    .quality-text {
-        color: #28a745;
-        font-weight: 600;
-    }
-
-    .btn-large {
-        padding: 15px 40px;
-        font-size: 18px;
-        font-weight: 600;
-    }
-
+    
     .btn-block {
         width: 100%;
-        padding: 15px;
-        font-size: 18px;
-        font-weight: 600;
-    }
-
-    .login-footer {
-        margin-top: 20px;
-        text-align: center;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-    }
-
-    .separator {
-        color: #ccc;
-    }
-
-    .btn-link {
-        background: none;
-        border: none;
-        color: #667eea;
-        cursor: pointer;
-        text-decoration: none;
-        padding: 10px;
-    }
-
-    .btn-link:hover {
-        text-decoration: underline;
+        padding: 1rem;
+        font-size: 1.1rem;
+        margin-top: 1rem;
     }
 
     .alert {
-        padding: 15px;
-        border-radius: 10px;
-        margin-bottom: 20px;
+        padding: 0.75rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
     }
-
+    
     .alert-error {
-        background-color: #f8d7da;
-        color: #721c24;
-        border: 1px solid #f5c6cb;
-    }
-
-    .alert-info {
-        background-color: #d1ecf1;
-        color: #0c5460;
-        border: 1px solid #bee5eb;
-    }
-
-    .alert-success {
-        background-color: #d4edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
+        background-color: #fff5f5;
+        color: #c53030;
+        border: 1px solid #feb2b2;
     }
 </style>
 
 @code {
-    private bool isCapturing = false;
-    private bool isVerifying = false;
-    private FingerprintTemplate? capturedTemplate;
+    private string username = "";
+    private string password = "";
     private string errorMessage = "";
-    private string successMessage = "";
-    private List<AttendanceWeb.Models.Admin> admins = new();
+    private bool isLoading = false;
 
-    protected override async Task OnInitializedAsync()
+    private async Task HandleKeyPress(KeyboardEventArgs e)
     {
-        await LoadAdmins();
+        if (e.Key == "Enter")
+        {
+            await LoginWithPassword();
+        }
     }
 
-    private async Task LoadAdmins()
+    private async Task LoginWithPassword()
     {
-        admins = await Database.GetAllAdminsAsync();
-    }
-
-    private async Task StartCapture()
-    {
+        isLoading = true;
         errorMessage = "";
-        successMessage = "";
-        isCapturing = true;
-        capturedTemplate = null;
-
+        
         try
         {
-            var result = await ApiClient.CaptureAsync();
-
-            if (result.Success && result.Template != null)
+            var admins = await Database.GetAllAdminsAsync();
+            var admin = admins.FirstOrDefault(a => a.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
+            
+            if (admin != null)
             {
-                capturedTemplate = new FingerprintTemplate
+                if (admin.Password == password)
                 {
-                    TemplateData = result.Template,
-                    Quality = result.Quality
-                };
-
-                if (capturedTemplate.Quality < 30)
+                    AuthService.Login(admin.Username);
+                    
+                    // Persist session via localStorage
+                    await JSRuntime.InvokeVoidAsync("localStorage.setItem", "adminUser", admin.Username);
+                    
+                    Navigation.NavigateTo("/admin/dashboard");
+                }
+                else
                 {
-                    errorMessage = "Poor fingerprint quality. Please try again.";
-                    capturedTemplate = null;
+                    errorMessage = "Invalid password.";
                 }
             }
             else
             {
-                errorMessage = result.Error ?? result.Message ?? "Failed to capture fingerprint";
+                // Fallback for initial setup if empty or default admin
+                if (admins.Count == 0 && username == "admin" && password == "admin")
+                {
+                    AuthService.Login("admin");
+                    await JSRuntime.InvokeVoidAsync("localStorage.setItem", "adminUser", "admin");
+                    Navigation.NavigateTo("/admin/dashboard");
+                }
+                else
+                {
+                    errorMessage = "Invalid username or password.";
+                }
             }
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error: {ex.Message}";
+            errorMessage = "Login error: " + ex.Message;
         }
         finally
         {
-            isCapturing = false;
+            isLoading = false;
         }
     }
 
-    private async Task VerifyAdmin()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (capturedTemplate == null) return;
-
-        errorMessage = "";
-        isVerifying = true;
-
-        try
+        if (firstRender)
         {
-            if (admins.Count == 0)
+            var savedUser = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "adminUser");
+            if (!string.IsNullOrEmpty(savedUser))
             {
-                errorMessage = "No admin accounts found. Please register an admin first.";
-                isVerifying = false;
-                return;
+                AuthService.Login(savedUser);
+                Navigation.NavigateTo("/admin/dashboard");
             }
-
-            // Try to match against all admin fingerprints
-            foreach (var admin in admins)
-            {
-                var verifyResult = await ApiClient.CompareTemplatesAsync(
-                    capturedTemplate.TemplateData,
-                    admin.TemplateData
-                );
-
-                if (verifyResult.Success)
-                {
-                    // Login successful
-                    AuthService.Login(admin.Username);
-                    successMessage = $"Welcome, {admin.Name}!";
-                    
-                    await Task.Delay(1000);
-                    Navigation.NavigateTo("/admin/dashboard");
-                    return;
-                }
-            }
-
-            // No match found
-            errorMessage = "Fingerprint not recognized. Access denied.";
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Verification error: {ex.Message}";
-        }
-        finally
-        {
-            isVerifying = false;
         }
     }
 }

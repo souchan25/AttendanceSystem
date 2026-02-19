@@ -5,6 +5,7 @@
 @inject AttendanceDatabase Database
 @inject AuthService AuthService
 @inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 
 <PageTitle>Admin Dashboard</PageTitle>
@@ -94,25 +95,26 @@ else
                             </div>
                         </div>
 
+
                         <div class="form-row">
                              <div class="form-group">
                                 <label>Time In (Start)</label>
-                                <input type="text" @bind="eventForm.TimeInStart" placeholder="HH:mm" class="form-control" />
+                                <input type="time" @bind="eventForm.TimeInStart" class="form-control" />
                              </div>
                              <div class="form-group">
                                 <label>Time In (End)</label>
-                                <input type="text" @bind="eventForm.TimeInEnd" placeholder="HH:mm" class="form-control" />
+                                <input type="time" @bind="eventForm.TimeInEnd" class="form-control" />
                              </div>
                         </div>
 
                         <div class="form-row">
                              <div class="form-group">
                                 <label>Time Out (Start)</label>
-                                <input type="text" @bind="eventForm.TimeOutStart" placeholder="HH:mm" class="form-control" />
+                                <input type="time" @bind="eventForm.TimeOutStart" class="form-control" />
                              </div>
                              <div class="form-group">
                                 <label>Time Out (End)</label>
-                                <input type="text" @bind="eventForm.TimeOutEnd" placeholder="HH:mm" class="form-control" />
+                                <input type="time" @bind="eventForm.TimeOutEnd" class="form-control" />
                              </div>
                         </div>
 
@@ -125,37 +127,66 @@ else
                     </div>
                 }
 
+
+                <div class="filter-controls" style="margin-bottom: 20px;">
+                    <button class="btn btn-sm @(eventFilter == "Ongoing" ? "btn-primary" : "btn-outline-primary")" 
+                            @onclick='() => eventFilter = "Ongoing"'>Ongoing</button>
+                    <button class="btn btn-sm @(eventFilter == "Completed" ? "btn-primary" : "btn-outline-primary")" 
+                            @onclick='() => eventFilter = "Completed"'>Completed</button>
+                    <button class="btn btn-sm @(eventFilter == "Upcoming" ? "btn-primary" : "btn-outline-primary")" 
+                            @onclick='() => eventFilter = "Upcoming"'>Upcoming</button>
+                    <button class="btn btn-sm @(eventFilter == "Archived" ? "btn-primary" : "btn-outline-primary")" 
+                            @onclick='() => eventFilter = "Archived"'>Archived</button>
+                </div>
+
                 <div class="events-list">
-                    @foreach (var evt in events.OrderByDescending(e => e.EventDate))
+                    @foreach (var evt in events.Where(e => {
+                        if (eventFilter == "Archived") return e.IsDeleted;
+                        if (e.IsDeleted) return false;
+                        if (eventFilter == "Ongoing") return e.IsActive;
+                        if (eventFilter == "Completed") return !e.IsActive && e.EventDate < DateTime.Now;
+                        if (eventFilter == "Upcoming") return !e.IsActive && e.EventDate >= DateTime.Now;
+                        return true;
+                    }).OrderByDescending(e => e.EventDate))
                     {
-                        <div class="event-card">
+                        <div class="event-card @(evt.IsDeleted ? "archived" : "")">
                             <div class="event-header">
-                                <div>
-                                    <h4>@evt.EventName</h4>
-                                    <p>@evt.Period - @evt.AcademicYear</p>
-                                    <p class="event-date">📅 @evt.EventDate.ToString("MMMM dd, yyyy")</p>
+                                <div class="event-info">
+                                    <h4>@evt.EventName 
+                                        @if(!evt.IsDeleted) {
+                                            <span class="status-badge-pill @(evt.IsActive ? "ongoing" : "completed")">
+                                                @(evt.IsActive ? "Ongoing" : "Completed")
+                                            </span>
+                                        }
+                                    </h4>
+                                    <p class="event-date">📅 @evt.EventDate.ToString("MMMM dd, yyyy") (@evt.AcademicYear)</p>
+                                    @if (!string.IsNullOrEmpty(evt.Description))
+                                    {
+                                        <p class="event-desc">@evt.Description</p>
+                                    }
                                 </div>
                                 <div class="event-actions">
-                                    <button class="btn-icon" @onclick="() => EditEvent(evt)" title="Edit">✏️</button>
-                                    <button class="btn-icon" @onclick="() => ToggleEventStatus(evt)" 
-                                            title="@(evt.IsActive ? "Deactivate" : "Activate")">
-                                        @(evt.IsActive ? "✓" : "✗")
-                                    </button>
-                                    <button class="btn-icon danger" @onclick="() => DeleteEvent(evt)" title="Delete">🗑️</button>
+                                    @if (!evt.IsDeleted)
+                                    {
+                                        <button class="btn-icon" @onclick="() => EditEvent(evt)" title="Edit">✏️</button>
+                                        <button class="btn-icon" @onclick="() => ToggleEventStatus(evt)" 
+                                                title="@(evt.IsActive ? "Mark Completed" : "Mark Ongoing")">
+                                            @(evt.IsActive ? "✅" : "🏁")
+                                        </button>
+                                        <button class="btn-icon danger" @onclick="() => DeleteEvent(evt)" title="Archive">🗑️</button>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-warning">Archived</span>
+                                    }
                                 </div>
                             </div>
-                            @if (!string.IsNullOrEmpty(evt.Description))
-                            {
-                                <p class="event-desc">@evt.Description</p>
-                            }
-                            <span class="status-badge @(evt.IsActive ? "active" : "inactive")">
-                                @(evt.IsActive ? "Active" : "Inactive")
-                            </span>
                         </div>
                     }
                 </div>
             </div>
         }
+
 
         <!-- Students Tab -->
         @if (activeTab == "students")
@@ -164,7 +195,7 @@ else
                 <div class="section-header">
                     <h2>Student Management</h2>
                     <div class="header-actions">
-                        <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/enroll")'>+ Enroll Student</button>
+                        <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/enroll")'>+ Add Student</button>
                         <div class="search-box">
                             <input type="text" @bind="studentSearch" @bind:after="FilterStudents" 
                                    placeholder="Search students..." class="form-control" />
@@ -176,34 +207,92 @@ else
                     @foreach (var student in filteredStudents)
                     {
                         <div class="student-card">
+                            <div class="student-header">
+                                <span class="student-badge-status @(student.IsActive ? "active" : "inactive")" 
+                                      title="@(student.IsActive ? "Active" : "Inactive")"></span>
+                            </div>
                             <div class="student-avatar">@GetInitials(student.Name)</div>
                             <div class="student-info">
                                 <h4>@student.Name</h4>
-                                <p>@student.StudentId</p>
-                                <p>@student.Program - Year @student.YearLevel</p>
-                                <p class="enrolled-date">Enrolled: @student.EnrolledDate.ToString("MMM dd, yyyy")</p>
+                                <span class="student-id">@student.StudentId</span>
+                                <span class="student-detail">@student.Program - Y@student.YearLevel @(student.Section != null ? $"- Sec {student.Section}" : "")</span>
+                                <span class="enrolled-date">Enrolled: @student.EnrolledDate.ToString("MMM dd, yyyy")</span>
                             </div>
+
                             <div class="student-actions">
+                                <button class="btn-icon" @onclick="() => ShowStudentHistory(student)" title="View History">📜</button>
                                 <button class="btn-icon" @onclick="() => ToggleStudentStatus(student)" 
                                         title="@(student.IsActive ? "Deactivate" : "Activate")">
-                                    @(student.IsActive ? "✓" : "✗")
+                                    @(student.IsActive ? "🔒" : "🔓")
                                 </button>
                                 <button class="btn-icon danger" @onclick="() => DeleteStudent(student)" title="Delete">
                                     🗑️
                                 </button>
                             </div>
-                            <span class="status-badge @(student.IsActive ? "active" : "inactive")">
-                                @(student.IsActive ? "Active" : "Inactive")
-                            </span>
                         </div>
                     }
                 </div>
+
 
                 @if (filteredStudents.Count == 0)
                 {
                     <div class="no-data">
                         <div class="icon">🔍</div>
                         <p>No students found</p>
+                    </div>
+                }
+
+                @if (showStudentHistoryModal && selectedStudentForHistory != null)
+                {
+                    <div class="modal-overlay">
+                        <div class="modal-card">
+                            <div class="modal-header">
+                                <h3>History: @selectedStudentForHistory.Name</h3>
+                                <button class="btn-close" @onclick="CloseStudentHistory">×</button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="stats-summary">
+                                    <div class="stat-box present">
+                                        <span class="value">@studentStats.Present</span>
+                                        <span class="label">Present</span>
+                                    </div>
+                                    <div class="stat-box absent">
+                                        <span class="value">@studentStats.Absent</span>
+                                        <span class="label">Absent</span>
+                                    </div>
+                                    <div class="stat-box total">
+                                        <span class="value">@(studentStats.Present + studentStats.Absent)</span>
+                                        <span class="label">Total Events</span>
+                                    </div>
+                                </div>
+
+                                <div class="history-table-container">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>Event</th>
+                                                <th>Date</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var record in studentHistory)
+                                            {
+                                                <tr>
+                                                    <td>@record.Event.EventName</td>
+                                                    <td>@record.Event.EventDate.ToString("MMM dd")</td>
+                                                    <td>
+                                                        <span class="status-badge @(record.Record.Status.ToLower())">
+                                                            @record.Record.Status
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 }
             </div>
@@ -215,13 +304,24 @@ else
             <div class="tab-content">
                 <div class="section-header">
                     <h2>Attendance Records</h2>
-                    <div class="form-group" style="margin: 0; min-width: 300px;">
-                        <select @bind="selectedEventId" @bind:after="() => LoadEventRecords(selectedEventId)" class="form-control">
-                            @foreach (var evt in events.OrderByDescending(e => e.EventDate))
-                            {
-                                <option value="@evt.Id">@evt.EventName (@evt.Period - @evt.AcademicYear)</option>
-                            }
-                        </select>
+                    <div style="display: flex; gap: 10px;">
+                        <div class="form-group" style="margin: 0; min-width: 300px;">
+                            <select @bind="selectedEventId" @bind:after="() => LoadEventRecords(selectedEventId)" class="form-control">
+                                @foreach (var evt in events.OrderByDescending(e => e.EventDate))
+                                {
+                                    <option value="@evt.Id">@evt.EventName (@evt.Period - @evt.AcademicYear)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin: 0; width: 150px;">
+                            <select @bind="selectedYearFilter" @bind:after="FilterEventRecords" class="form-control">
+                                <option value="All">All Years</option>
+                                <option value="1">1st Year</option>
+                                <option value="2">2nd Year</option>
+                                <option value="3">3rd Year</option>
+                                <option value="4">4th Year</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -540,43 +640,52 @@ else
         position: relative;
         border: 1px solid var(--neutral-200);
         transition: all var(--transition-base);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
     }
 
     .event-card:hover {
         box-shadow: var(--shadow-md);
         transform: translateY(-2px);
+        border-color: var(--primary-200);
     }
 
     .event-header {
         display: flex;
         justify-content: space-between;
-        align-items: start;
+        align-items: flex-start;
         gap: var(--space-4);
+        width: 100%;
+    }
+
+    .event-info {
+        flex: 1;
     }
 
     .event-header h4 {
         color: var(--neutral-900);
-        margin-bottom: var(--space-2);
-        font-size: 1.125rem;
-        font-weight: 600;
+        margin-bottom: var(--space-1);
+        font-size: 1.25rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
     }
 
     .event-header p {
         color: var(--neutral-600);
-        font-size: 0.875rem;
+        font-size: 0.95rem;
         margin: var(--space-1) 0;
     }
 
     .event-date {
         font-weight: 600;
-        color: var(--neutral-700);
-    }
-
-    .event-desc {
-        color: var(--neutral-600);
-        margin-top: var(--space-4);
-        font-size: 0.875rem;
-        line-height: 1.5;
+        color: var(--primary-700);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        margin-top: var(--space-2) !important;
     }
 
     .event-actions {
@@ -585,124 +694,120 @@ else
         flex-shrink: 0;
     }
 
-    .btn-icon {
-        padding: var(--space-2);
-        background: white;
-        border: 1px solid var(--neutral-300);
-        border-radius: var(--radius-md);
-        cursor: pointer;
-        font-size: 1.125rem;
-        transition: all var(--transition-base);
-        width: 36px;
-        height: 36px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .btn-icon:hover {
-        transform: translateY(-2px);
-        border-color: var(--primary-500);
-        background: var(--primary-50);
-    }
-
-    .btn-icon.danger:hover {
-        border-color: var(--error-500);
-        background: var(--error-50);
-    }
-
-    .status-badge {
+    .status-badge-pill {
         display: inline-flex;
         align-items: center;
-        padding: var(--space-1) var(--space-3);
-        border-radius: var(--radius-full);
+        padding: 4px 10px;
+        border-radius: 9999px;
         font-size: 0.75rem;
-        font-weight: 600;
-        margin-top: var(--space-4);
+        font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.025em;
+        letter-spacing: 0.05em;
     }
 
-    .status-badge.active {
-        background: var(--success-50, #f0fdf4);
-        color: var(--success-700);
+    .status-badge-pill.ongoing {
+        background: #dcfce7;
+        color: #166534;
+        border: 1px solid #bbf7d0;
     }
 
-    .status-badge.inactive {
-        background: var(--error-50, #fef2f2);
-        color: var(--error-600);
-    }
-
-    .search-box {
-        flex: 1;
-        max-width: 400px;
-    }
-
-    .students-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-        gap: var(--space-4);
+    .status-badge-pill.completed {
+        background: #f1f5f9;
+        color: #475569;
+        border: 1px solid #e2e8f0;
     }
 
     .student-card {
         background: white;
-        padding: var(--space-5);
+        padding: var(--space-6);
         border-radius: var(--radius-xl);
         display: flex;
+        flex-direction: column;
         gap: var(--space-4);
-        align-items: start;
         position: relative;
         border: 1px solid var(--neutral-200);
         transition: all var(--transition-base);
+        align-items: center;
+        text-align: center;
     }
 
     .student-card:hover {
-        box-shadow: var(--shadow-md);
-        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+        transform: translateY(-4px);
+        border-color: var(--primary-200);
     }
 
     .student-avatar {
-        width: 60px;
-        height: 60px;
+        width: 80px;
+        height: 80px;
         border-radius: 50%;
-        background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-700) 100%);
+        background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-700) 100%);
         color: white;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.5rem;
+        font-size: 2rem;
         font-weight: 700;
-        flex-shrink: 0;
+        margin-bottom: var(--space-2);
+        box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
     }
 
     .student-info {
-        flex: 1;
-        min-width: 0;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-1);
     }
 
     .student-info h4 {
         color: var(--neutral-900);
-        margin-bottom: var(--space-1);
-        font-size: 1rem;
-        font-weight: 600;
+        margin: 0;
+        font-size: 1.125rem;
+        font-weight: 700;
     }
 
-    .student-info p {
-        color: var(--neutral-600);
+    .student-id {
+        color: var(--neutral-500);
+        font-family: monospace;
         font-size: 0.875rem;
-        margin: var(--space-1) 0;
+        background: var(--neutral-100);
+        padding: 2px 8px;
+        border-radius: 4px;
+        display: inline-block;
+        margin: 0 auto;
     }
 
-    .enrolled-date {
-        font-size: 0.8125rem !important;
-        color: var(--neutral-500) !important;
-        margin-top: var(--space-2) !important;
+    .student-detail {
+        color: var(--neutral-600);
+        font-size: 0.9rem;
     }
+
+    .student-header {
+        position: absolute;
+        top: var(--space-4);
+        right: var(--space-4);
+        display: flex; 
+        gap: var(--space-2);
+    }
+
+    .student-badge-status {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .student-badge-status.active { background: #22c55e; box-shadow: 0 0 0 4px #dcfce7; }
+    .student-badge-status.inactive { background: #ef4444; box-shadow: 0 0 0 4px #fee2e2; }
 
     .student-actions {
+        width: 100%;
         display: flex;
-        gap: var(--space-2);
-        flex-shrink: 0;
+        justify-content: center;
+        gap: var(--space-3);
+        margin-top: var(--space-2);
+        padding-top: var(--space-4);
+        border-top: 1px solid var(--neutral-100);
     }
 
     .stats-grid {
@@ -945,10 +1050,69 @@ else
             grid-template-columns: 1fr;
         }
     }
+
+    .status-badge.completed { background: #e2e8f0; color: #4a5568; }
+    .status-badge.ongoing { background: #def7ec; color: #03543f; }
+    
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+    .modal-card {
+        background: white;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 600px;
+        max-height: 80vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    .modal-header {
+        padding: 15px;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .modal-body {
+        padding: 15px;
+        overflow-y: auto;
+    }
+    .stats-summary {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    .stat-box {
+        flex: 1;
+        padding: 10px;
+        border-radius: 5px;
+        text-align: center;
+    }
+    .stat-box.present { background: #def7ec; color: #03543f; }
+    .stat-box.absent { background: #fde8e8; color: #9b1c1c; }
+    .stat-box.total { background: #edf2f7; color: #2d3748; }
+    .stat-box .value { display: block; font-size: 1.5rem; font-weight: bold; }
+    
+    .event-card.archived {
+        opacity: 0.6;
+        border: 1px dashed #cbd5e0;
+    }
 </style>
 
 @code {
+    private string eventFilter = "Ongoing";
     private string activeTab = "events";
+    private string selectedYearFilter = "All"; // Filter for attendance records
     private List<Event> events = new();
     private List<Student> students = new();
     private List<Student> filteredStudents = new();
@@ -961,6 +1125,7 @@ else
     
     // Records Tab
     private List<AttendanceInfo> eventRecords = new();
+    private List<AttendanceInfo> allEventRecords = new();
     private int selectedEventId = 0;
 
     protected override async Task OnInitializedAsync()
@@ -972,7 +1137,8 @@ else
     {
         try
         {
-            events = await Task.Run(() => Database.GetAllEvents());
+            // Load all including deleted for archive support
+            events = await Task.Run(() => Database.GetEvents(true));
             students = await Task.Run(() => Database.GetAllStudents());
             filteredStudents = students;
             
@@ -1010,13 +1176,26 @@ else
         try 
         {
             selectedEventId = eventId;
-            eventRecords = await Task.Run(() => Database.GetEventAttendance(eventId));
-            StateHasChanged();
+            allEventRecords = await Task.Run(() => Database.GetEventAttendance(eventId));
+            FilterEventRecords();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading records: {ex.Message}");
         }
+    }
+
+    private void FilterEventRecords()
+    {
+        if (selectedYearFilter == "All")
+        {
+            eventRecords = allEventRecords.ToList();
+        }
+        else if (int.TryParse(selectedYearFilter, out int year))
+        {
+            eventRecords = allEventRecords.Where(r => r.Student.YearLevel == year).ToList();
+        }
+        StateHasChanged();
     }
 
 
@@ -1111,6 +1290,26 @@ else
         }
     }
 
+
+    private List<AttendanceInfo> studentHistory = new();
+    private (int Present, int Absent) studentStats;
+    private Student? selectedStudentForHistory = null;
+    private bool showStudentHistoryModal = false;
+
+    private async Task ShowStudentHistory(Student student)
+    {
+        selectedStudentForHistory = student;
+        studentStats = await Task.Run(() => Database.GetStudentAttendanceStats(student.Id));
+        studentHistory = await Task.Run(() => Database.GetStudentAttendanceHistory(student.Id));
+        showStudentHistoryModal = true;
+    }
+
+    private void CloseStudentHistory()
+    {
+        showStudentHistoryModal = false;
+        selectedStudentForHistory = null;
+    }
+
     private async Task ToggleStudentStatus(Student student)
     {
         try
@@ -1155,7 +1354,8 @@ else
             filteredStudents = students.Where(s =>
                 s.Name.ToLower().Contains(query) ||
                 s.StudentId.ToLower().Contains(query) ||
-                s.Program.ToLower().Contains(query)
+                s.Program.ToLower().Contains(query) ||
+                (s.Section != null && s.Section.ToLower().Contains(query))
             ).ToList();
         }
     }
@@ -1186,9 +1386,13 @@ else
         return true;
     }
 
-    private void Logout()
+    private async Task Logout()
     {
         AuthService.Logout();
-        Navigation.NavigateTo("/admin/login");
+        // Clear local storage logic needs JavascriptInterop if it was set there
+        try {
+            await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "adminUser");
+        } catch {}
+        Navigation.NavigateTo("/admin/login", true);
     }
 }
