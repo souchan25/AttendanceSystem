@@ -173,6 +173,9 @@
     .btn-reinit:disabled {
         opacity: 0.7;
         cursor: wait;
+    }
+
+    .portal-container {
         min-height: 100vh;
         background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-800) 100%);
         padding: var(--space-6);
@@ -216,13 +219,13 @@
     .loading, .empty-state {
         text-align: center;
         padding: var(--space-8);
-        color: var(--gray-600);
+        color: var(--neutral-600);
     }
 
     .spinner {
         width: 50px;
         height: 50px;
-        border: 4px solid var(--gray-200);
+        border: 4px solid var(--neutral-200);
         border-top-color: var(--primary-600);
         border-radius: 50%;
         animation: spin 1s linear infinite;
@@ -235,12 +238,12 @@
     }
 
     .empty-state h3 {
-        color: var(--gray-800);
+        color: var(--neutral-800);
         margin-bottom: var(--space-3);
     }
 
     .empty-state .hint {
-        color: var(--gray-500);
+        color: var(--neutral-500);
         font-size: 0.875rem;
         margin-top: var(--space-2);
     }
@@ -253,7 +256,7 @@
 
     .event-card {
         background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-        border: 2px solid var(--gray-200);
+        border: 2px solid var(--neutral-200);
         border-radius: var(--radius-lg);
         padding: var(--space-5);
         cursor: pointer;
@@ -303,7 +306,7 @@
     }
 
     .event-content h3 {
-        color: var(--gray-900);
+        color: var(--neutral-900);
         font-size: 1.375rem;
         font-weight: 700;
         margin-bottom: var(--space-2);
@@ -320,7 +323,7 @@
         display: flex;
         align-items: center;
         gap: var(--space-2);
-        color: var(--gray-600);
+        color: var(--neutral-600);
         font-size: 0.875rem;
         font-weight: 500;
     }
@@ -335,14 +338,15 @@
     }
 
     .event-description {
-        color: var(--gray-600);
+        color: var(--neutral-600);
         font-size: 0.875rem;
         line-height: 1.5;
         margin-bottom: var(--space-3);
     }
 
     .time-info {
-        background: rgba(59, 130, 246, 0.1);
+        background: rgba(99, 102, 241, 0.05);
+        border: 1px solid rgba(99, 102, 241, 0.1);
         border-radius: var(--radius-md);
         padding: var(--space-3);
         margin-top: var(--space-3);
@@ -357,7 +361,7 @@
     }
 
     .time-label {
-        color: var(--gray-700);
+        color: var(--neutral-700);
         font-weight: 600;
     }
 
@@ -369,7 +373,7 @@
     .event-footer {
         margin-top: auto;
         padding-top: var(--space-4);
-        border-top: 1px solid var(--gray-200);
+        border-top: 1px solid var(--neutral-200);
     }
 
     .btn-select {
@@ -415,7 +419,7 @@
     }
 
     .info-content ol {
-        color: var(--gray-700);
+        color: var(--neutral-700);
         line-height: 1.8;
         padding-left: var(--space-5);
     }
