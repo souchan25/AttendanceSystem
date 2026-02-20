@@ -5,6 +5,7 @@
 @inject AttendanceDatabase Database
 @inject FingerprintApiClient ApiClient
 @inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 
 <PageTitle>Student Portal</PageTitle>
@@ -12,6 +13,9 @@
 <div class="portal-container">
     <div class="portal-header">
         <div class="header-controls">
+            <button class="btn-fullscreen" @onclick="ToggleFullscreen" title="@(isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen")">
+                @(isFullscreen ? "🗗" : "⛶")
+            </button>
             @if (isInitializing)
             {
                 <span class="status-msg">🔄 Initializing Scanner...</span>
@@ -173,6 +177,27 @@
     .btn-reinit:disabled {
         opacity: 0.7;
         cursor: wait;
+    }
+
+    .btn-fullscreen {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        padding: 8px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s;
+        backdrop-filter: blur(5px);
+        font-size: 1.25rem;
+    }
+
+    .btn-fullscreen:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.3);
+        transform: scale(1.05);
     }
 
     .portal-container {
@@ -469,6 +494,7 @@
     private bool isLoading = true;
     private bool isInitializing = false;
     private string statusMessage = "";
+    private bool isFullscreen = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -520,5 +546,22 @@
     private void SelectEvent(Event evt)
     {
         Navigation.NavigateTo($"/attendance?eventId={evt.Id}");
+    }
+
+    private async Task ToggleFullscreen()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("toggleFullscreen");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Fullscreen error: {ex.Message}");
+            statusMessage = "Fullscreen not supported. Press F11 key.";
+            StateHasChanged();
+            await Task.Delay(3000);
+            statusMessage = "";
+            StateHasChanged();
+        }
     }
 }

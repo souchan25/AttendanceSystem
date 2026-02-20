@@ -874,7 +874,7 @@ namespace AttendanceWeb.Services
         public void AddAdmin(Admin admin)
         {
             using var conn = GetConnection();
-            var sql = @"INSERT OR REPLACE INTO Admins (Username, Password, Name, TemplateData, CreatedDate)
+            var sql = @"INSERT INTO Admins (Username, Password, Name, TemplateData, CreatedDate)
                        VALUES (@Username, @Password, @Name, @TemplateData, @CreatedDate)";
             
             using var cmd = new SqliteCommand(sql, conn);
@@ -885,6 +885,73 @@ namespace AttendanceWeb.Services
             cmd.Parameters.AddWithValue("@CreatedDate", admin.CreatedDate.ToString("o"));
             
             cmd.ExecuteNonQuery();
+        }
+
+        public void UpdateAdmin(Admin admin)
+        {
+            using var conn = GetConnection();
+            var sql = @"UPDATE Admins 
+                       SET Username = @Username, Password = @Password, Name = @Name, TemplateData = @TemplateData
+                       WHERE Id = @Id";
+            
+            using var cmd = new SqliteCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Id", admin.Id);
+            cmd.Parameters.AddWithValue("@Username", admin.Username);
+            cmd.Parameters.AddWithValue("@Password", admin.Password);
+            cmd.Parameters.AddWithValue("@Name", admin.Name);
+            cmd.Parameters.AddWithValue("@TemplateData", admin.TemplateData);
+            
+            cmd.ExecuteNonQuery();
+        }
+
+        public void DeleteAdmin(int adminId)
+        {
+            using var conn = GetConnection();
+            var sql = "DELETE FROM Admins WHERE Id = @Id";
+            
+            using var cmd = new SqliteCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Id", adminId);
+            
+            cmd.ExecuteNonQuery();
+        }
+
+        public Admin? GetAdminById(int id)
+        {
+            using var conn = GetConnection();
+            var sql = "SELECT * FROM Admins WHERE Id = @Id";
+            
+            using var cmd = new SqliteCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Id", id);
+            
+            using var reader = cmd.ExecuteReader();
+            
+            if (reader.Read())
+            {
+                var admin = new Admin
+                {
+                    Id = Convert.ToInt32(reader["Id"]),
+                    Username = reader["Username"].ToString() ?? "",
+                    Name = reader["Name"] != DBNull.Value ? reader["Name"].ToString() ?? "" : "",
+                    TemplateData = reader["TemplateData"] != DBNull.Value ? reader["TemplateData"].ToString() ?? "" : ""
+                };
+                
+                var createdStr = reader["CreatedDate"] != DBNull.Value ? reader["CreatedDate"].ToString() : null;
+                admin.CreatedDate = createdStr != null ? DateTime.Parse(createdStr) : DateTime.Now;
+
+                try 
+                {
+                    var pwdIdx = reader.GetOrdinal("Password");
+                    if (!reader.IsDBNull(pwdIdx))
+                    {
+                        admin.Password = reader.GetString(pwdIdx);
+                    }
+                }
+                catch { }
+                
+                return admin;
+            }
+            
+            return null;
         }
 
         public async Task<List<Admin>> GetAllAdminsAsync()

@@ -10,6 +10,10 @@
 <PageTitle>Admin Login</PageTitle>
 
 <div class="login-container">
+    <button class="btn-fullscreen-login" @onclick="ToggleFullscreen" title="@(isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen")">
+        @(isFullscreen ? "🗗" : "⛶")
+    </button>
+    
     <div class="login-card">
         <div class="login-header">
             <h1>🔐 Admin Login</h1>
@@ -110,6 +114,32 @@
         color: #c53030;
         border: 1px solid #feb2b2;
     }
+
+    .btn-fullscreen-login {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        padding: 10px;
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        backdrop-filter: blur(5px);
+        z-index: 10;
+    }
+
+    .btn-fullscreen-login:hover {
+        background: rgba(255, 255, 255, 0.3);
+        transform: scale(1.05);
+    }
 </style>
 
 @code {
@@ -117,6 +147,7 @@
     private string password = "";
     private string errorMessage = "";
     private bool isLoading = false;
+    private bool isFullscreen = false;
 
     private async Task HandleKeyPress(KeyboardEventArgs e)
     {
@@ -140,10 +171,11 @@
             {
                 if (admin.Password == password)
                 {
-                    AuthService.Login(admin.Username);
+                    AuthService.Login(admin.Username, admin.Id);
                     
                     // Persist session via localStorage
                     await JSRuntime.InvokeVoidAsync("localStorage.setItem", "adminUser", admin.Username);
+                    await JSRuntime.InvokeVoidAsync("localStorage.setItem", "adminId", admin.Id.ToString());
                     
                     Navigation.NavigateTo("/admin/dashboard");
                 }
@@ -157,8 +189,9 @@
                 // Fallback for initial setup if empty or default admin
                 if (admins.Count == 0 && username == "admin" && password == "admin")
                 {
-                    AuthService.Login("admin");
+                    AuthService.Login("admin", 0);
                     await JSRuntime.InvokeVoidAsync("localStorage.setItem", "adminUser", "admin");
+                    await JSRuntime.InvokeVoidAsync("localStorage.setItem", "adminId", "0");
                     Navigation.NavigateTo("/admin/dashboard");
                 }
                 else
@@ -182,11 +215,31 @@
         if (firstRender)
         {
             var savedUser = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "adminUser");
+            var savedIdStr = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "adminId");
             if (!string.IsNullOrEmpty(savedUser))
             {
-                AuthService.Login(savedUser);
+                int adminId = 0;
+                int.TryParse(savedIdStr, out adminId);
+                AuthService.Login(savedUser, adminId);
                 Navigation.NavigateTo("/admin/dashboard");
             }
+        }
+    }
+
+    private async Task ToggleFullscreen()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("toggleFullscreen");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Fullscreen error: {ex.Message}");
+            errorMessage = "Fullscreen not supported. Press F11 key to enter fullscreen.";
+            StateHasChanged();
+            await Task.Delay(3000);
+            errorMessage = "";
+            StateHasChanged();
         }
     }
 }

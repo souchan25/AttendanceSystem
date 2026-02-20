@@ -6,6 +6,7 @@
 @inject AuthService AuthService
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
+@implements IDisposable
 @rendermode InteractiveServer
 
 <PageTitle>Admin Dashboard</PageTitle>
@@ -32,7 +33,12 @@ else
                     <h1>⚙️ Admin Dashboard</h1>
                     <p>Welcome, @AuthService.AdminUsername</p>
                 </div>
-                <button class="btn btn-secondary" @onclick="Logout">Logout</button>
+                <div style="display: flex; gap: var(--space-3); align-items: center;">
+                    <button class="btn-fullscreen-admin" @onclick="ToggleFullscreen" title="@(isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen")">
+                        @(isFullscreen ? "🗗" : "⛶")
+                    </button>
+                    <button class="btn btn-secondary" @onclick="Logout">Logout</button>
+                </div>
             </div>
 
         <!-- Tab Navigation -->
@@ -48,6 +54,9 @@ else
             </button>
             <button class="tab @(activeTab == "stats" ? "active" : "")" @onclick='() => activeTab = "stats"'>
                 📊 Statistics
+            </button>
+            <button class="tab @(activeTab == "settings" ? "active" : "")" @onclick='() => activeTab = "settings"'>
+                ⚙️ Settings
             </button>
         </div>
 
@@ -437,6 +446,133 @@ else
                 </div>
             </div>
         }
+
+        <!-- Settings Tab -->
+        @if (activeTab == "settings")
+        {
+            <div class="tab-content">
+                <h2>Admin Settings</h2>
+
+                <!-- My Profile Section -->
+                <div class="settings-section">
+                    <h3>My Profile</h3>
+                    @if (!showChangePassword)
+                    {
+                        <div class="profile-info">
+                            <div class="profile-item">
+                                <label>Username:</label>
+                                <span>@AuthService.AdminUsername</span>
+                            </div>
+                            <button class="btn btn-primary" @onclick="() => showChangePassword = true">
+                                Change Password
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="form-card">
+                            <h4>Change Password</h4>
+                            
+                            @if (!string.IsNullOrEmpty(passwordChangeMessage))
+                            {
+                                <div class="alert @(passwordChangeSuccess ? "alert-success" : "alert-error")">
+                                    @passwordChangeMessage
+                                </div>
+                            }
+
+                            <div class="form-group">
+                                <label>Current Password *</label>
+                                <input type="password" @bind="currentPassword" class="form-control" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>New Password *</label>
+                                <input type="password" @bind="newPassword" class="form-control" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Confirm New Password *</label>
+                                <input type="password" @bind="confirmPassword" class="form-control" />
+                            </div>
+
+                            <div class="form-actions">
+                                <button class="btn btn-cancel" @onclick="CancelPasswordChange">Cancel</button>
+                                <button class="btn btn-primary" @onclick="SavePasswordChange">Update Password</button>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Admin Management Section -->
+                <div class="settings-section">
+                    <div class="section-header">
+                        <h3>Admin Accounts</h3>
+                        <button class="btn btn-primary" @onclick="ShowAddAdminForm">+ Add Admin</button>
+                    </div>
+
+                    @if (showAddAdminForm)
+                    {
+                        <div class="form-card">
+                            <h4>@(editingAdminId == 0 ? "Add New Admin" : "Edit Admin")</h4>
+                            
+                            @if (!string.IsNullOrEmpty(adminFormMessage))
+                            {
+                                <div class="alert @(adminFormSuccess ? "alert-success" : "alert-error")">
+                                    @adminFormMessage
+                                </div>
+                            }
+
+                            <div class="form-group">
+                                <label>Username *</label>
+                                <input type="text" @bind="adminForm.Username" class="form-control" placeholder="Enter username" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Name</label>
+                                <input type="text" @bind="adminForm.Name" class="form-control" placeholder="Full name (optional)" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Password *</label>
+                                <input type="password" @bind="adminForm.Password" class="form-control" placeholder="Enter password" />
+                            </div>
+
+                            <div class="form-actions">
+                                <button class="btn btn-cancel" @onclick="CancelAdminForm">Cancel</button>
+                                <button class="btn btn-primary" @onclick="SaveAdmin">
+                                    @(editingAdminId == 0 ? "Create Admin" : "Update Admin")
+                                </button>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="admins-list">
+                        @foreach (var admin in adminsList)
+                        {
+                            <div class="admin-card">
+                                <div class="admin-info">
+                                    <h4>@admin.Username @(admin.Id == AuthService.AdminId ? "(You)" : "")</h4>
+                                    @if (!string.IsNullOrEmpty(admin.Name))
+                                    {
+                                        <p>@admin.Name</p>
+                                    }
+                                    <span class="admin-date">Created: @admin.CreatedDate.ToString("MMM dd, yyyy")</span>
+                                </div>
+                                <div class="admin-actions">
+                                    @if (adminsList.Count > 1)
+                                    {
+                                        <button class="btn-icon danger" @onclick="() => DeleteAdmin(admin)" 
+                                                title="Delete" disabled="@(admin.Id == AuthService.AdminId)">
+                                            🗑️
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
     </div>
 </div>
 }
@@ -565,6 +701,28 @@ else
         display: flex;
         gap: var(--space-2);
         flex-wrap: wrap;
+    }
+
+    .btn-fullscreen-admin {
+        background: var(--neutral-100);
+        color: var(--neutral-700);
+        border: 1px solid var(--neutral-300);
+        padding: var(--space-3);
+        width: 44px;
+        height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-lg);
+        cursor: pointer;
+        transition: all var(--transition-base);
+        font-size: 1.5rem;
+    }
+
+    .btn-fullscreen-admin:hover {
+        background: var(--neutral-200);
+        border-color: var(--neutral-400);
+        transform: scale(1.05);
     }
 
     .page-header h1 {
@@ -1181,6 +1339,102 @@ else
         opacity: 0.6;
         border: 1px dashed #cbd5e0;
     }
+
+    .settings-section {
+        background: white;
+        padding: var(--space-6);
+        border-radius: var(--radius-xl);
+        border: 1px solid var(--neutral-200);
+        margin-bottom: var(--space-6);
+    }
+
+    .settings-section h3 {
+        color: var(--neutral-900);
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: var(--space-5);
+    }
+
+    .settings-section h4 {
+        color: var(--neutral-800);
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: var(--space-4);
+    }
+
+    .profile-info {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+    }
+
+    .profile-item {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-4);
+        background: var(--neutral-50);
+        border-radius: var(--radius-md);
+    }
+
+    .profile-item label {
+        font-weight: 600;
+        color: var(--neutral-700);
+        margin: 0;
+    }
+
+    .profile-item span {
+        color: var(--neutral-900);
+    }
+
+    .admins-list {
+        display: grid;
+        gap: var(--space-4);
+        margin-top: var(--space-5);
+    }
+
+    .admin-card {
+        background: var(--neutral-50);
+        padding: var(--space-5);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--neutral-200);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: all var(--transition-base);
+    }
+
+    .admin-card:hover {
+        border-color: var(--neutral-300);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .admin-info {
+        flex: 1;
+    }
+
+    .admin-info h4 {
+        color: var(--neutral-900);
+        margin: 0 0 var(--space-1) 0;
+        font-size: 1.125rem;
+        font-weight: 600;
+    }
+
+    .admin-info p {
+        color: var(--neutral-600);
+        margin: 0;
+        font-size: 0.875rem;
+    }
+
+    .admin-date {
+        color: var(--neutral-500);
+        font-size: 0.813rem;
+    }
+
+    .admin-actions {
+        display: flex;
+        gap: var(--space-2);
+    }
 </style>
 
 @code {
@@ -1202,9 +1456,29 @@ else
     private List<AttendanceInfo> allEventRecords = new();
     private int selectedEventId = 0;
 
+    // Settings Tab - Password Change
+    private bool showChangePassword = false;
+    private string currentPassword = "";
+    private string newPassword = "";
+    private string confirmPassword = "";
+    private string passwordChangeMessage = "";
+    private bool passwordChangeSuccess = false;
+
+    // Settings Tab - Admin Management
+    private bool showAddAdminForm = false;
+    private int editingAdminId = 0;
+    private Models.Admin adminForm = new();
+    private string adminFormMessage = "";
+    private bool adminFormSuccess = false;
+    private List<Models.Admin> adminsList = new();
+
+    // Fullscreen
+    private bool isFullscreen = false;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
+        await LoadAdmins();
     }
 
     private async Task LoadData()
@@ -1466,7 +1740,195 @@ else
         // Clear local storage logic needs JavascriptInterop if it was set there
         try {
             await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "adminUser");
+            await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "adminId");
         } catch {}
         Navigation.NavigateTo("/admin/login", true);
+    }
+
+    // Settings - Password Change
+    private void CancelPasswordChange()
+    {
+        showChangePassword = false;
+        currentPassword = "";
+        newPassword = "";
+        confirmPassword = "";
+        passwordChangeMessage = "";
+    }
+
+    private async Task SavePasswordChange()
+    {
+        passwordChangeMessage = "";
+        passwordChangeSuccess = false;
+
+        if (string.IsNullOrWhiteSpace(currentPassword) || string.IsNullOrWhiteSpace(newPassword))
+        {
+            passwordChangeMessage = "Please fill in all fields.";
+            return;
+        }
+
+        if (newPassword != confirmPassword)
+        {
+            passwordChangeMessage = "New passwords do not match.";
+            return;
+        }
+
+        if (newPassword.Length < 4)
+        {
+            passwordChangeMessage = "Password must be at least 4 characters.";
+            return;
+        }
+
+        try
+        {
+            var currentAdmin = await Task.Run(() => Database.GetAdminById(AuthService.AdminId));
+            if (currentAdmin == null)
+            {
+                passwordChangeMessage = "Admin not found.";
+                return;
+            }
+
+            if (currentAdmin.Password != currentPassword)
+            {
+                passwordChangeMessage = "Current password is incorrect.";
+                return;
+            }
+
+            currentAdmin.Password = newPassword;
+            await Task.Run(() => Database.UpdateAdmin(currentAdmin));
+
+            passwordChangeMessage = "Password changed successfully!";
+            passwordChangeSuccess = true;
+            
+            await Task.Delay(2000);
+            CancelPasswordChange();
+        }
+        catch (Exception ex)
+        {
+            passwordChangeMessage = $"Error: {ex.Message}";
+        }
+    }
+
+    // Settings - Admin Management
+    private async Task LoadAdmins()
+    {
+        try
+        {
+            adminsList = await Database.GetAllAdminsAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading admins: {ex.Message}");
+        }
+    }
+
+    private void ShowAddAdminForm()
+    {
+        editingAdminId = 0;
+        adminForm = new Models.Admin { CreatedDate = DateTime.Now };
+        adminFormMessage = "";
+        showAddAdminForm = true;
+    }
+
+    private void CancelAdminForm()
+    {
+        showAddAdminForm = false;
+        editingAdminId = 0;
+        adminForm = new Models.Admin();
+        adminFormMessage = "";
+    }
+
+    private async Task SaveAdmin()
+    {
+        adminFormMessage = "";
+        adminFormSuccess = false;
+
+        if (string.IsNullOrWhiteSpace(adminForm.Username) || string.IsNullOrWhiteSpace(adminForm.Password))
+        {
+            adminFormMessage = "Username and password are required.";
+            return;
+        }
+
+        if (adminForm.Password.Length < 4)
+        {
+            adminFormMessage = "Password must be at least 4 characters.";
+            return;
+        }
+
+        try
+        {
+            // Check if username already exists
+            var existingAdmin = adminsList.FirstOrDefault(a => 
+                a.Username.Equals(adminForm.Username, StringComparison.OrdinalIgnoreCase) && 
+                a.Id != editingAdminId);
+            
+            if (existingAdmin != null)
+            {
+                adminFormMessage = "Username already exists.";
+                return;
+            }
+
+            if (editingAdminId == 0)
+            {
+                // Add new admin
+                await Task.Run(() => Database.AddAdmin(adminForm));
+                adminFormMessage = "Admin created successfully!";
+            }
+            else
+            {
+                // Update existing admin
+                adminForm.Id = editingAdminId;
+                await Task.Run(() => Database.UpdateAdmin(adminForm));
+                adminFormMessage = "Admin updated successfully!";
+            }
+
+            adminFormSuccess = true;
+            await LoadAdmins();
+            
+            await Task.Delay(1500);
+            CancelAdminForm();
+        }
+        catch (Exception ex)
+        {
+            adminFormMessage = $"Error: {ex.Message}";
+        }
+    }
+
+    private async Task DeleteAdmin(Models.Admin admin)
+    {
+        if (admin.Id == AuthService.AdminId)
+        {
+            return; // Cannot delete yourself
+        }
+
+        if (confirm($"Delete admin '{admin.Username}'? This action cannot be undone."))
+        {
+            try
+            {
+                await Task.Run(() => Database.DeleteAdmin(admin.Id));
+                await LoadAdmins();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error deleting admin: {ex.Message}");
+            }
+        }
+    }
+
+    // Fullscreen
+    private async Task ToggleFullscreen()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("toggleFullscreen");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Fullscreen error: {ex.Message}");
+        }
+    }
+
+    public void Dispose()
+    {
+        // Cleanup if needed
     }
 }

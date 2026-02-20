@@ -5,6 +5,7 @@
 @inject FingerprintApiClient ApiClient
 @inject AuthService AuthService
 @inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 
 <PageTitle>Student Enrollment</PageTitle>
@@ -25,6 +26,10 @@
 else
 {
 <div class="page-container">
+    <button class="btn-fullscreen-page" @onclick="ToggleFullscreen" title="@(isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen")">
+        @(isFullscreen ? "🗗" : "⛶")
+    </button>
+    
     <div class="content-card">
         <div class="page-header">
             <button class="btn-back" @onclick='() => Navigation.NavigateTo("/admin/dashboard")'>← Back</button>
@@ -464,6 +469,34 @@ else
             grid-template-columns: 1fr;
         }
     }
+
+    .btn-fullscreen-page {
+        position: fixed;
+        top: var(--space-8);
+        right: var(--space-8);
+        background: var(--neutral-100);
+        color: var(--neutral-700);
+        border: 1px solid var(--neutral-300);
+        padding: var(--space-3);
+        width: 44px;
+        height: 44px;
+        border-radius: var(--radius-lg);
+        cursor: pointer;
+        font-size: 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all var(--transition-base);
+        z-index: 1000;
+        box-shadow: var(--shadow-md);
+    }
+
+    .btn-fullscreen-page:hover {
+        background: var(--neutral-200);
+        border-color: var(--neutral-400);
+        transform: scale(1.05);
+        box-shadow: var(--shadow-lg);
+    }
 </style>
 
 @code {
@@ -475,6 +508,7 @@ else
     private int currentSample = 0;
     private string errorMessage = "";
     private string captureMessage = "";
+    private bool isFullscreen = false;
 
     private bool IsFormValid()
     {
@@ -589,6 +623,23 @@ else
         {
             captureMessage = $"❌ Error saving enrollment: {ex.Message}";
             isSaving = false;
+        }
+    }
+
+    private async Task ToggleFullscreen()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("toggleFullscreen");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Fullscreen error: {ex.Message}");
+            errorMessage = "Fullscreen not supported. Press F11 key to enter fullscreen.";
+            StateHasChanged();
+            await Task.Delay(3000);
+            errorMessage = "";
+            StateHasChanged();
         }
     }
 }

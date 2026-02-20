@@ -161,12 +161,20 @@ app.MapGet("/api/fingerprint/status", (FingerprintService fingerprintService) =>
 .WithName("GetReaderStatus")
 .WithOpenApi();
 
-app.MapPost("/api/fingerprint/reinitialize", (FingerprintService fingerprintService) =>
+app.MapPost("/api/fingerprint/reinitialize", async (FingerprintService fingerprintService) =>
 {
-    fingerprintService.ReinitializeReader();
+    await fingerprintService.ReinitializeReaderAsync();
     return Results.Ok(new { Success = true, Message = "Reader reinitialization requested" });
 })
 .WithName("ReinitializeReader")
+.WithOpenApi();
+
+app.MapPost("/api/fingerprint/reset", (FingerprintService fingerprintService) =>
+{
+    fingerprintService.ResetReader();
+    return Results.Ok(new { Success = true, Message = "Fingerprint reader reset successfully." });
+})
+.WithName("ResetReader")
 .WithOpenApi();
 
 app.Run();
