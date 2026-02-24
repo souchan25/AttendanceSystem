@@ -348,6 +348,7 @@ else
                     <div style="display: flex; gap: 10px;">
                         <div class="form-group" style="margin: 0; min-width: 300px;">
                             <select @bind="selectedEventId" @bind:after="() => LoadEventRecords(selectedEventId)" class="form-control">
+                                <option value="0">All Events</option>
                                 @foreach (var evt in events.OrderByDescending(e => e.EventDate))
                                 {
                                     <option value="@evt.Id">@evt.EventName (@evt.Period - @evt.AcademicYear)</option>
@@ -385,6 +386,10 @@ else
                                     <th>Student ID</th>
                                     <th>Name</th>
                                     <th>Program/Sec</th>
+                                    @if (selectedEventId == 0)
+                                    {
+                                        <th @onclick="ToggleSortByEvent" style="cursor: pointer" title="Click to sort by event">Event ↕</th>
+                                    }
                                     <th>Time In</th>
                                     <th>Time Out</th>
                                     <th>Status</th>
@@ -403,6 +408,10 @@ else
                                         <td>@record.Student.StudentId</td>
                                         <td><strong>@record.Student.Name</strong></td>
                                         <td>@($"{record.Student.Program} Y{record.Student.YearLevel}" + (string.IsNullOrEmpty(record.Student.Section) ? "" : $" - {record.Student.Section}"))</td>
+                                        @if (selectedEventId == 0)
+                                        {
+                                            <td>@record.Event.EventName</td>
+                                        }
                                         <td>@(record.Record.TimeIn?.ToString("hh:mm tt") ?? "-")</td>
                                         <td>@(record.Record.TimeOut?.ToString("hh:mm tt") ?? "-")</td>
                                         <td><span class="status-badge @statusClass">@status</span></td>
@@ -1654,13 +1663,28 @@ else
         try 
         {
             selectedEventId = eventId;
-            allEventRecords = await Task.Run(() => Database.GetEventAttendance(eventId));
+            if (eventId == 0)
+            {
+                allEventRecords = await Task.Run(() => Database.GetAllAttendanceInfo());
+            }
+            else
+            {
+                allEventRecords = await Task.Run(() => Database.GetEventAttendance(eventId));
+            }
             FilterEventRecords();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading records: {ex.Message}");
         }
+    }
+
+    private bool sortByEvent = false;
+
+    private void ToggleSortByEvent()
+    {
+        sortByEvent = !sortByEvent;
+        FilterEventRecords();
     }
 
     private void FilterEventRecords()
@@ -1677,11 +1701,23 @@ else
             query = query.Where(r => r.Student.Section == selectedSectionFilter);
         }
 
-        eventRecords = query
-            .OrderBy(r => r.Student.Section)
-            .ThenBy(r => r.Student.YearLevel)
-            .ThenBy(r => r.Student.Name)
-            .ToList();
+        if (sortByEvent && selectedEventId == 0)
+        {
+            eventRecords = query
+                .OrderBy(r => r.Event.EventName)
+                .ThenBy(r => r.Student.Section)
+                .ThenBy(r => r.Student.YearLevel)
+                .ThenBy(r => r.Student.Name)
+                .ToList();
+        }
+        else
+        {
+            eventRecords = query
+                .OrderBy(r => r.Student.Section)
+                .ThenBy(r => r.Student.YearLevel)
+                .ThenBy(r => r.Student.Name)
+                .ToList();
+        }
 
         StateHasChanged();
     }
