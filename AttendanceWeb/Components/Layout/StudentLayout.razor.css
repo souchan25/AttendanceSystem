@@ -1,0 +1,53 @@
+.student-layout {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* Prevent main scrollbar */
+  height: 100%;
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* Let individual pages handle their internal scrolling if needed */
+  height: 100%;
+}
+
+#blazor-error-ui {
+  background: var(--error-500);
+  bottom: 0;
+  box-shadow: var(--shadow-xl);
+  display: none;
+  left: 0;
+  padding: var(--space-4) var(--space-6);
+  position: fixed;
+  width: 100%;
+  z-index: 1000;
+  color: white;
+  border-top: 3px solid var(--error-600);
+}
+
+#blazor-error-ui .dismiss {
+  cursor: pointer;
+  position: absolute;
+  right: var(--space-6);
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.25rem;
+  opacity: 0.8;
+  transition: opacity var(--transition-fast);
+}
+
+#blazor-error-ui .dismiss:hover {
+  opacity: 1;
+}

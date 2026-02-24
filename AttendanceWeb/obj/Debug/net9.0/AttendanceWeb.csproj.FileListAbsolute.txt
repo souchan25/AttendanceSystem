@@ -212,5 +212,6 @@ C:\Users\Souchan\OneDrive\Desktop\AttendanceSystem\AttendanceWeb\obj\Debug\net9.
 C:\Users\Souchan\OneDrive\Desktop\AttendanceSystem\AttendanceWeb\obj\Debug\net9.0\AttendanceWeb.genruntimeconfig.cache
 C:\Users\Souchan\OneDrive\Desktop\AttendanceSystem\AttendanceWeb\obj\Debug\net9.0\ref\AttendanceWeb.dll
 C:\Users\Souchan\OneDrive\Desktop\AttendanceSystem\AttendanceWeb\obj\Debug\net9.0\compressed\thv6z8p039-8dw69zkb7a.gz
-C:\Users\Souchan\OneDrive\Desktop\AttendanceSystem\AttendanceWeb\obj\Debug\net9.0\compressed\hgva6najh1-7zj4ixrelb.gz
-C:\Users\Souchan\OneDrive\Desktop\AttendanceSystem\AttendanceWeb\obj\Debug\net9.0\compressed\lhr3h6g6vp-7zj4ixrelb.gz
+C:\Users\Souchan\OneDrive\Desktop\AttendanceSystem\AttendanceWeb\obj\Debug\net9.0\scopedcss\Components\Layout\StudentLayout.razor.rz.scp.css
+C:\Users\Souchan\OneDrive\Desktop\AttendanceSystem\AttendanceWeb\obj\Debug\net9.0\compressed\hgva6najh1-tpm6u68hw0.gz
+C:\Users\Souchan\OneDrive\Desktop\AttendanceSystem\AttendanceWeb\obj\Debug\net9.0\compressed\lhr3h6g6vp-tpm6u68hw0.gz

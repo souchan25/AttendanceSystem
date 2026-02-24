@@ -3,6 +3,7 @@
 @using AttendanceWeb.Services
 @inject AttendanceDatabase Database
 @inject NavigationManager Navigation
+@layout AttendanceWeb.Components.Layout.StudentLayout
 @rendermode InteractiveServer
 
 <PageTitle>My Attendance Records</PageTitle>
@@ -23,6 +24,30 @@
     }
     else
     {
+        <!-- Student Info -->
+        <div class="student-info-card">
+            <div class="student-info-row">
+                <span class="info-label">Name:</span>
+                <span class="info-value">@student.Name</span>
+            </div>
+            <div class="student-info-row">
+                <span class="info-label">Student ID:</span>
+                <span class="info-value">@student.StudentId</span>
+            </div>
+            <div class="student-info-row">
+                <span class="info-label">Program:</span>
+                <span class="info-value">@(string.IsNullOrEmpty(student.Program) ? "-" : student.Program)</span>
+            </div>
+            <div class="student-info-row">
+                <span class="info-label">Year Level:</span>
+                <span class="info-value">@(student.YearLevel > 0 ? student.YearLevel.ToString() : "-")</span>
+            </div>
+            <div class="student-info-row">
+                <span class="info-label">Section:</span>
+                <span class="info-value">@(string.IsNullOrEmpty(student.Section) ? "-" : student.Section)</span>
+            </div>
+        </div>
+
         <!-- Stats Cards -->
         <div class="stats-grid">
             <div class="stat-card present">
@@ -202,6 +227,38 @@
         padding: 50px;
         font-size: 1.2rem;
         color: #666;
+    }
+
+    .student-info-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px 25px;
+        margin-bottom: 25px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        border: 1px solid #eee;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+    }
+
+    .student-info-row {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .info-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #888;
+        font-weight: 600;
+    }
+
+    .info-value {
+        font-size: 1rem;
+        color: #333;
+        font-weight: 600;
     }
 </style>
 

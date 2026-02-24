@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "UuNN4nDddZE=",
+  "dgSpecHash": "sqbJTwKKtXA=",
   "success": true,
-  "projectFilePath": "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\attendanceweb\\AttendanceWeb.csproj",
+  "projectFilePath": "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\Attendanceweb\\AttendanceWeb.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Souchan\\.nuget\\packages\\microsoft.data.sqlite\\10.0.0\\microsoft.data.sqlite.10.0.0.nupkg.sha512",
     "C:\\Users\\Souchan\\.nuget\\packages\\microsoft.data.sqlite.core\\10.0.0\\microsoft.data.sqlite.core.10.0.0.nupkg.sha512",

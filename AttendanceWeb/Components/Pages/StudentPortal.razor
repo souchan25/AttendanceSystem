@@ -6,506 +6,486 @@
 @inject FingerprintApiClient ApiClient
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
+@layout AttendanceWeb.Components.Layout.StudentLayout
 @rendermode InteractiveServer
 
 <PageTitle>Student Portal</PageTitle>
 
 <div class="portal-container">
-    <div class="portal-header">
-        <div class="header-controls">
-            <button class="btn-fullscreen" @onclick="ToggleFullscreen" title="@(isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen")">
-                @(isFullscreen ? "🗗" : "⛶")
-            </button>
-            @if (isInitializing)
-            {
-                <span class="status-msg">🔄 Initializing Scanner...</span>
-            }
-            else if (!string.IsNullOrEmpty(statusMessage))
-            {
-                <span class="status-msg">@statusMessage</span>
-            }
+    <div class="portal-header-bar">
+        <div class="header-branding">
+            <div class="logo-icon">🎓</div>
+            <div>
+                <h1 class="portal-title">Student Attendance Portal</h1>
+                <p class="portal-subtitle">Select an event to check your attendance</p>
+            </div>
         </div>
-        <h1 class="portal-title">🎓 Student Attendance Portal</h1>
-        <p class="portal-subtitle">Select an event to check your attendance</p>
+        <div class="header-controls">
+            @if (isReinitializing)
+            {
+                <div class="status-msg">Reinitializing...</div>
+            }
+            <button class="btn-reinit" @onclick="ReinitializeScanner" disabled="@isReinitializing" title="Reinitialize Scanner">
+                <span>Scan Fix</span>
+                <span style="font-size: 1.2em">🔄</span>
+            </button>
+            <button class="btn-fullscreen" @onclick="ToggleFullscreen" title="Fullscreen Mode">
+                ⛶
+            </button>
+        </div>
     </div>
 
-    <div class="event-selection-card">
-        <h2>Active Events</h2>
-        
-        @if (isLoading)
-        {
-            <div class="loading">
-                <div class="spinner"></div>
-                <p>Loading events...</p>
+    <div class="portal-body">
+        <div class="events-section">
+            <div class="section-header-simple">
+                <h2>Active Events</h2>
             </div>
-        }
-        else if (activeEvents.Count == 0)
-        {
-            <div class="empty-state">
-                <div class="empty-icon">📅</div>
-                <h3>No Active Events</h3>
-                <p>There are no events available for attendance at the moment.</p>
-                <p class="hint">Please check back later or contact your administrator.</p>
-            </div>
-        }
-        else
-        {
-            <div class="events-grid">
-                @foreach (var evt in activeEvents)
-                {
-                    <div class="event-card" @onclick="() => SelectEvent(evt)">
-                        <div class="event-header">
-                            <div class="event-icon">📅</div>
-                            <div class="event-status">
-                                <span class="status-dot active"></span>
-                                Active
+
+            @if (isLoading)
+            {
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading active events...</p>
+                </div>
+            }
+            else if (activeEvents.Count == 0)
+            {
+                <div class="empty-state">
+                    <div class="empty-icon">📅</div>
+                    <h3>No Active Events</h3>
+                    <p>There are no ongoing events at the moment.</p>
+                    <p class="hint">Please check back later or contact your administrator.</p>
+                </div>
+            }
+            else
+            {
+                <div class="events-grid">
+                    @foreach (var evt in activeEvents)
+                    {
+                        <div class="event-card" @onclick="() => SelectEvent(evt.Id)">
+                            <div class="event-header">
+                                <div class="event-icon">🗓️</div>
+                                @if (evt.IsActive)
+                                {
+                                    <div class="event-status">
+                                        <span class="status-dot"></span> Active
+                                    </div>
+                                }
+                            </div>
+                            
+                            <div class="event-content">
+                                <h3>@evt.EventName</h3>
+                                
+                                <div class="event-details">
+                                    <span class="detail-item" title="Period">
+                                        <span class="icon">📖</span> @evt.Period
+                                    </span>
+                                    <span class="detail-item" title="Academic Year">
+                                        <span class="icon">📅</span> @evt.AcademicYear
+                                    </span>
+                                </div>
+
+                                <div class="event-date">
+                                    <span class="icon">🗓️</span> @evt.EventDate.ToString("MMMM dd, yyyy")
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(evt.Description))
+                                {
+                                    <p class="event-description">@evt.Description</p>
+                                }
+
+                                <div class="time-info">
+                                    <div class="time-slot">
+                                        <span class="time-label">⬇ Time In:</span>
+                                        <span class="time-range">
+                                            @(evt.TimeInStart?.ToString("hh:mm tt") ?? "--") - 
+                                            @(evt.TimeInEnd?.ToString("hh:mm tt") ?? "--")
+                                        </span>
+                                    </div>
+                                    <div class="time-slot">
+                                        <span class="time-label">⬆ Time Out:</span>
+                                        <span class="time-range">
+                                            @(evt.TimeOutStart?.ToString("hh:mm tt") ?? "--") - 
+                                            @(evt.TimeOutEnd?.ToString("hh:mm tt") ?? "--")
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="event-footer">
+                                <button class="btn-select">Select Event ➜</button>
                             </div>
                         </div>
-                        
-                        <div class="event-content">
-                            <h3>@evt.EventName</h3>
-                            <p class="event-details">
-                                <span class="detail-item">
-                                    <span class="icon">📖</span>
-                                    @evt.Period
-                                </span>
-                                <span class="detail-item">
-                                    <span class="icon">📆</span>
-                                    @evt.AcademicYear
-                                </span>
-                            </p>
-                            <p class="event-date">
-                                <span class="icon">🗓️</span>
-                                @evt.EventDate.ToString("MMMM dd, yyyy")
-                            </p>
-                            
-                            @if (!string.IsNullOrEmpty(evt.Description))
-                            {
-                                <p class="event-description">@evt.Description</p>
-                            }
-
-                            @if (evt.TimeInStart.HasValue || evt.TimeOutStart.HasValue)
-                            {
-                                <div class="time-info">
-                                    @if (evt.TimeInStart.HasValue)
-                                    {
-                                        <div class="time-slot">
-                                            <span class="time-label">⬇️ Time In:</span>
-                                            <span class="time-range">@evt.TimeInStart - @evt.TimeInEnd</span>
-                                        </div>
-                                    }
-                                    @if (evt.TimeOutStart.HasValue)
-                                    {
-                                        <div class="time-slot">
-                                            <span class="time-label">⬆️ Time Out:</span>
-                                            <span class="time-range">@evt.TimeOutStart - @evt.TimeOutEnd</span>
-                                        </div>
-                                    }
-                                </div>
-                            }
-                        </div>
-                        
-                        <div class="event-footer">
-                            <button class="btn-select">
-                                Select Event →
-                            </button>
-                        </div>
-                    </div>
-                }
-            </div>
-        }
-    </div>
-
-    <div class="info-section">
-        <div class="info-card">
-            <div class="info-icon">👆</div>
-            <div class="info-content">
-                <h4>How to Check Attendance</h4>
-                <ol>
-                    <li>Select the event you want to attend</li>
-                    <li>Place your finger on the scanner when prompted</li>
-                    <li>Your attendance will be recorded automatically</li>
-                    <li>You can view your records after checking in</li>
-                </ol>
-            </div>
+                    }
+                </div>
+            }
         </div>
+
+        <aside class="instruction-sidebar">
+            <div class="instruction-card">
+                <div class="instruction-header">
+                    <div class="info-icon">💡</div>
+                    <h4>Instructions</h4>
+                </div>
+                <div class="steps-list">
+                    <div class="step-item">
+                        <div class="step-number">1</div>
+                        <div class="step-text">Select an <strong>active event</strong> from the list on the left.</div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-number">2</div>
+                        <div class="step-text">Check the <strong>Time In</strong> and <strong>Time Out</strong> schedule.</div>
+                    </div>
+                     <div class="step-item">
+                        <div class="step-number">3</div>
+                        <div class="step-text">Place your finger on the <strong>scanner</strong> when prompted.</div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-number">4</div>
+                        <div class="step-text">Wait for the <strong>confirmation message</strong>.</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="system-status-card">
+                 <h4>System Status</h4>
+                 <div class="status-row">
+                     <span>Scanner:</span>
+                     <span class="status-badge ready">Ready</span>
+                 </div>
+                 <div class="status-row">
+                     <span>Network:</span>
+                     <span class="status-badge online">Online</span>
+                 </div>
+            </div>
+        </aside>
     </div>
 </div>
 
 <style>
     .portal-container {
         position: relative;
+        height: 100%;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-800) 100%);
+        padding: var(--space-4);
     }
 
     .header-controls {
-        position: absolute;
-        top: 20px;
-        right: 20px;
         display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 8px;
+        gap: 12px;
+        align-items: center;
     }
 
-    .status-msg {
-        background: rgba(0, 0, 0, 0.6);
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 0.8rem;
+    .portal-header-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--space-4);
+        padding: var(--space-2) var(--space-2);
+        flex-shrink: 0;
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border-radius: var(--radius-xl);
+        padding: var(--space-3) var(--space-5);
+        border: 1px solid rgba(255, 255, 255, 0.1);
     }
-
-    .btn-reinit {
-        background: rgba(255, 255, 255, 0.2);
-        color: white;
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        padding: 8px 16px;
-        border-radius: 20px;
-        cursor: pointer;
-        font-weight: 600;
+    
+    .header-branding {
         display: flex;
         align-items: center;
-        gap: 8px;
-        transition: all 0.2s;
-        backdrop-filter: blur(5px);
+        gap: var(--space-3);
+    }
+    
+    .logo-icon {
+        font-size: 2rem;
+        background: white;
+        width: 48px; height: 48px;
+        border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        color: var(--primary-600);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
 
-    .btn-reinit:hover:not(:disabled) {
-        background: rgba(255, 255, 255, 0.3);
-        transform: translateY(-1px);
+    .status-msg { background: rgba(0,0,0,0.6); padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; color: white; border: 1px solid rgba(255,255,255,0.2); }
+    
+    .btn-reinit, .btn-fullscreen {
+        background: rgba(255, 255, 255, 0.15); color: white; border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 8px 16px; border-radius: 12px; cursor: pointer; font-weight: 600;
+        display: flex; align-items: center; gap: 8px; transition: all 0.2s;
     }
-
-    .btn-reinit:disabled {
-        opacity: 0.7;
-        cursor: wait;
-    }
-
-    .btn-fullscreen {
-        background: rgba(255, 255, 255, 0.2);
-        color: white;
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        padding: 8px 12px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        transition: all 0.2s;
-        backdrop-filter: blur(5px);
-        font-size: 1.25rem;
-    }
-
-    .btn-fullscreen:hover:not(:disabled) {
-        background: rgba(255, 255, 255, 0.3);
-        transform: scale(1.05);
-    }
-
-    .portal-container {
-        min-height: 100vh;
-        background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-800) 100%);
-        padding: var(--space-6);
-    }
-
-    .portal-header {
-        text-align: center;
-        color: white;
-        margin-bottom: var(--space-8);
-        padding: var(--space-6);
-    }
+    .btn-reinit:hover:not(:disabled), .btn-fullscreen:hover { background: rgba(255, 255, 255, 0.25); transform: translateY(-1px); border-color: rgba(255,255,255,0.4); }
 
     .portal-title {
-        font-size: 2.5rem;
-        font-weight: 700;
-        margin-bottom: var(--space-3);
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        font-size: 1.5rem;
+        font-weight: 800;
+        margin: 0;
+        letter-spacing: -0.5px;
+        color: white;
     }
 
     .portal-subtitle {
+        font-size: 0.9rem;
+        opacity: 0.9;
+        margin: 0;
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    .portal-body {
+        flex: 1;
+        display: flex;
+        gap: var(--space-5);
+        min-height: 0; 
+        overflow: hidden;
+    }
+
+    /* LEFT SIDE: EVENTS */
+    .events-section {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+        min-width: 0;
+    }
+    
+    .section-header-simple {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 var(--space-2);
+        margin-bottom: -8px; /* Visual tightening */
+    }
+    
+    .section-header-simple h2 {
+        color: white;
+        margin: 0;
         font-size: 1.25rem;
+        font-weight: 600;
         opacity: 0.95;
     }
 
-    .event-selection-card {
-        background: white;
-        border-radius: var(--radius-xl);
-        padding: var(--space-6);
-        max-width: 1200px;
-        margin: 0 auto var(--space-6) auto;
-        box-shadow: var(--shadow-xl);
+    .live-indicator {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: white;
+        font-weight: 700;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        background: rgba(239, 68, 68, 0.2);
+        padding: 4px 10px;
+        border-radius: 20px;
+        border: 1px solid rgba(239, 68, 68, 0.4);
     }
 
-    .event-selection-card h2 {
-        color: var(--primary-700);
-        margin-bottom: var(--space-6);
-        font-size: 1.75rem;
-        text-align: center;
-    }
-
-    .loading, .empty-state {
-        text-align: center;
-        padding: var(--space-8);
-        color: var(--neutral-600);
-    }
-
-    .spinner {
-        width: 50px;
-        height: 50px;
-        border: 4px solid var(--neutral-200);
-        border-top-color: var(--primary-600);
+    .pulse-dot {
+        width: 8px;
+        height: 8px;
+        background: #ef4444;
         border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin: 0 auto var(--space-4);
+        box-shadow: 0 0 10px #ef4444;
+        animation: pulse-red 1.5s infinite;
     }
 
-    .empty-icon {
-        font-size: 4rem;
-        margin-bottom: var(--space-4);
-    }
-
-    .empty-state h3 {
-        color: var(--neutral-800);
-        margin-bottom: var(--space-3);
-    }
-
-    .empty-state .hint {
-        color: var(--neutral-500);
-        font-size: 0.875rem;
-        margin-top: var(--space-2);
+    @@keyframes pulse-red {
+        0% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(1.2); }
+        100% { opacity: 1; transform: scale(1); }
     }
 
     .events-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-        gap: var(--space-5);
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); /* Slightly wider cards */
+        grid-auto-rows: max-content; /* THIS FIXES THE STRETCHING */
+        gap: var(--space-4);
+        overflow-y: auto;
+        padding-right: var(--space-2);
+        padding-bottom: var(--space-4); /* Bottom padding for scroll */
     }
+    
+    /* Scrollbar */
+    .events-grid::-webkit-scrollbar { width: 6px; }
+    .events-grid::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); border-radius: 4px; }
+    .events-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 4px; }
+    .events-grid::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.5); }
 
     .event-card {
-        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-        border: 2px solid var(--neutral-200);
-        border-radius: var(--radius-lg);
-        padding: var(--space-5);
-        cursor: pointer;
-        transition: all var(--transition-base);
+        background: white;
+        border-radius: 24px; /* More rounded */
+        padding: 0; /* Removing padding to use inner spacing */
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        border: none;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        overflow: hidden;
+        height: auto; /* Allow natural height */
+    }
+
+    .event-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    }
+    
+    .event-header { 
+        padding: 24px 24px 0 24px;
+        display: flex; justify-content: space-between; align-items: flex-start;
+        margin-bottom: 16px;
+    }
+    
+    .event-icon { 
+        font-size: 1.75rem; 
+        background: var(--primary-50); 
+        width: 56px; height: 56px; 
+        display: flex; align-items: center; justify-content: center; 
+        border-radius: 16px; 
+        color: var(--primary-600);
+    }
+    
+    .event-status {
+        background: #ecfdf5; color: #059669; 
+        padding: 6px 12px; border-radius: 20px;
+        border: 1px solid #d1fae5;
+    }
+    
+    .event-content { padding: 0 24px; flex: 1; }
+
+    .event-content h3 { font-size: 1.25rem; color: var(--neutral-900); margin: 0 0 12px 0; letter-spacing: -0.025em; }
+    
+    .event-details { display: flex; gap: 16px; font-size: 0.85rem; color: var(--neutral-600); margin-bottom: 20px; }
+    .detail-item { background: var(--neutral-50); padding: 4px 10px; border-radius: 8px; font-weight: 600; }
+    
+    .event-date { color: var(--primary-700); font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    
+    .time-info {
+        background: #f8fafc;
+        border-radius: 16px;
+        padding: 16px;
+        margin-top: 20px;
+        border: 1px solid var(--neutral-100);
+    }
+    .time-slot { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem; }
+    .time-slot:last-child { margin-bottom: 0; }
+    .time-label { font-weight: 500; color: var(--neutral-500); }
+    
+    .event-footer {
+        padding: 24px;
+        margin-top: auto;
+    }
+    
+    .btn-select {
+        width: 100%; padding: 14px; background: var(--primary-600); color: white; border: none;
+        border-radius: 16px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: background 0.2s;
+        box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2);
+    }
+    .btn-select:hover { background: var(--primary-700); box-shadow: 0 6px 8px rgba(79, 70, 229, 0.3); transform: translateY(-1px); }
+
+
+    /* RIGHT SIDE: INSTRUCTIONS */
+    .instruction-sidebar {
+        width: 380px; /* Fixed width for better stability */
+        flex-shrink: 0;
         display: flex;
         flex-direction: column;
         gap: var(--space-4);
     }
 
-    .event-card:hover {
-        transform: translateY(-5px);
-        box-shadow: var(--shadow-lg);
-        border-color: var(--primary-400);
-        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    .instruction-card {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(12px);
+        border-radius: 24px;
+        padding: 32px;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.5);
     }
 
-    .event-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .event-icon {
-        font-size: 2rem;
-    }
-
-    .event-status {
+    .instruction-header {
         display: flex;
         align-items: center;
-        gap: var(--space-2);
-        font-size: 0.875rem;
-        color: var(--success-600);
-        font-weight: 600;
+        gap: 16px;
+        margin-bottom: 24px;
+        padding-bottom: 0;
+        border-bottom: none;
     }
 
-    .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: var(--success-500);
-        animation: pulse 2s ease-in-out infinite;
+    .info-icon { 
+        font-size: 1.5rem; 
+        background: #fffbeb; color: #d97706;
+        width: 48px; height: 48px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 2px 4px rgba(217, 119, 6, 0.2);
+    }
+    .instruction-header h4 { margin: 0; font-size: 1.25rem; color: var(--neutral-800); font-weight: 700; }
+
+    .steps-list { display: flex; flex-direction: column; gap: 20px; }
+
+    .step-item { display: flex; gap: 16px; align-items: flex-start; }
+
+    .step-number {
+        background: var(--primary-600); color: white;
+        width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center;
+        justify-content: center; font-weight: 700; flex-shrink: 0; font-size: 0.9rem;
+        box-shadow: 0 4px 6px rgba(79, 70, 229, 0.3);
     }
 
-    @@keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-    }
-
-    .event-content h3 {
-        color: var(--neutral-900);
-        font-size: 1.375rem;
-        font-weight: 700;
-        margin-bottom: var(--space-2);
-    }
-
-    .event-details {
-        display: flex;
-        gap: var(--space-4);
-        margin-bottom: var(--space-2);
-        flex-wrap: wrap;
-    }
-
-    .detail-item {
-        display: flex;
-        align-items: center;
-        gap: var(--space-2);
-        color: var(--neutral-600);
-        font-size: 0.875rem;
-        font-weight: 500;
-    }
-
-    .event-date {
-        color: var(--primary-600);
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: var(--space-2);
-        margin-bottom: var(--space-3);
-    }
-
-    .event-description {
-        color: var(--neutral-600);
-        font-size: 0.875rem;
-        line-height: 1.5;
-        margin-bottom: var(--space-3);
-    }
-
-    .time-info {
-        background: rgba(99, 102, 241, 0.05);
-        border: 1px solid rgba(99, 102, 241, 0.1);
-        border-radius: var(--radius-md);
-        padding: var(--space-3);
-        margin-top: var(--space-3);
-    }
-
-    .time-slot {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: var(--space-2) 0;
-        font-size: 0.875rem;
-    }
-
-    .time-label {
-        color: var(--neutral-700);
-        font-weight: 600;
-    }
-
-    .time-range {
-        color: var(--primary-700);
-        font-weight: 600;
-    }
-
-    .event-footer {
-        margin-top: auto;
-        padding-top: var(--space-4);
-        border-top: 1px solid var(--neutral-200);
-    }
-
-    .btn-select {
-        width: 100%;
-        padding: var(--space-3) var(--space-4);
-        background: var(--primary-600);
+    .step-text { font-size: 0.95rem; color: var(--neutral-700); line-height: 1.6; padding-top: 4px; }
+    
+    .system-status-card {
+        background: rgba(0,0,0,0.3);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        padding: 24px;
         color: white;
-        border: none;
-        border-radius: var(--radius-md);
-        font-weight: 600;
-        font-size: 1rem;
-        cursor: pointer;
-        transition: all var(--transition-base);
+        border: 1px solid rgba(255,255,255,0.1);
+    }    
+    .system-status-card h4 { margin: 0 0 var(--space-3) 0; font-size: 0.9rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.5px; }
+    
+    .status-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 0.9rem; }
+    
+    .status-badge {
+        padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
     }
-
-    .btn-select:hover {
-        background: var(--primary-700);
+    .status-badge.ready { background: #dcfce7; color: #166534; }
+    .status-badge.online { background: #dbeafe; color: #1e40af; }
+    
+    .loading, .empty-state {
+        background: white; border-radius: var(--radius-xl); padding: var(--space-8);
+        text-align: center; color: var(--neutral-600); display: flex; flex-direction: column;
+        align-items: center; justify-content: center; height: 100%;
     }
-
-    .info-section {
-        max-width: 1200px;
-        margin: 0 auto;
+    .spinner {
+        width: 40px; height: 40px; border: 3px solid var(--neutral-200); border-top-color: var(--primary-600);
+        border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: var(--space-3);
     }
+    @@keyframes spin { to { transform: rotate(360deg); } }
 
-    .info-card {
-        background: rgba(255, 255, 255, 0.95);
-        border-radius: var(--radius-lg);
-        padding: var(--space-5);
-        display: flex;
-        gap: var(--space-4);
-        align-items: start;
-    }
-
-    .info-icon {
-        font-size: 3rem;
-        flex-shrink: 0;
-    }
-
-    .info-content h4 {
-        color: var(--primary-700);
-        margin-bottom: var(--space-3);
-        font-size: 1.25rem;
-    }
-
-    .info-content ol {
-        color: var(--neutral-700);
-        line-height: 1.8;
-        padding-left: var(--space-5);
-    }
-
-    .info-content li {
-        margin-bottom: var(--space-2);
-    }
-
-    @@keyframes spin {
-        to { transform: rotate(360deg); }
-    }
-
-    @@media (max-width: 768px) {
-        .portal-container {
-            padding: var(--space-4);
-        }
-
-        .portal-title {
-            font-size: 1.75rem;
-        }
-
-        .portal-subtitle {
-            font-size: 1rem;
-        }
-
-        .events-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .event-selection-card {
-            padding: var(--space-4);
-        }
-
-        .info-card {
-            flex-direction: column;
-            text-align: center;
-        }
-
-        .info-content ol {
-            text-align: left;
-        }
+    @@media (max-width: 900px) {
+        .portal-body { flex-direction: column; overflow-y: auto; }
+        .events-grid { overflow-y: visible; }
+        .instruction-sidebar { min-width: auto; max-width: none; }
     }
 </style>
 
 @code {
     private List<Event> activeEvents = new();
     private bool isLoading = true;
-    private bool isInitializing = false;
+    private bool isReinitializing = false;
     private string statusMessage = "";
     private bool isFullscreen = false;
 
     protected override async Task OnInitializedAsync()
     {
         // Auto-refresh scanner on load
-        _ = HandleReinitialize();
+        _ = ReinitializeScanner();
         await LoadActiveEvents();
     }
 
-    private async Task HandleReinitialize()
+    private async Task ReinitializeScanner()
     {
-        isInitializing = true;
+        isReinitializing = true;
         statusMessage = "Initializing...";
         StateHasChanged();
 
@@ -520,7 +500,7 @@
             statusMessage = "Failed: " + (result.Message ?? result.Error);
         }
 
-        isInitializing = false;
+        isReinitializing = false;
         StateHasChanged();
 
         await Task.Delay(3000);
@@ -543,9 +523,9 @@
         StateHasChanged();
     }
 
-    private void SelectEvent(Event evt)
+    private void SelectEvent(int eventId)
     {
-        Navigation.NavigateTo($"/attendance?eventId={evt.Id}");
+        Navigation.NavigateTo($"/attendance?eventId={eventId}");
     }
 
     private async Task ToggleFullscreen()

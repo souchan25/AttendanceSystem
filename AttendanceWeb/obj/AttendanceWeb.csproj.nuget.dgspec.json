@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\attendanceweb\\AttendanceWeb.csproj": {}
+    "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\Attendanceweb\\AttendanceWeb.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\attendanceweb\\AttendanceWeb.csproj": {
+    "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\Attendanceweb\\AttendanceWeb.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\attendanceweb\\AttendanceWeb.csproj",
+        "projectUniqueName": "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\Attendanceweb\\AttendanceWeb.csproj",
         "projectName": "AttendanceWeb",
-        "projectPath": "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\attendanceweb\\AttendanceWeb.csproj",
+        "projectPath": "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\Attendanceweb\\AttendanceWeb.csproj",
         "packagesPath": "C:\\Users\\Souchan\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\attendanceweb\\obj\\",
+        "outputPath": "C:\\Users\\Souchan\\OneDrive\\Desktop\\AttendanceSystem\\Attendanceweb\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\Souchan\\AppData\\Roaming\\NuGet\\NuGet.Config"

@@ -169,6 +169,22 @@ else
                                         }
                                     </h4>
                                     <p class="event-date">📅 @evt.EventDate.ToString("MMMM dd, yyyy") (@evt.AcademicYear)</p>
+                                    
+                                    <div class="event-schedule-admin">
+                                        <div class="schedule-row">
+                                            <span class="schedule-label">⬇ Time In:</span>
+                                            <span class="schedule-value">
+                                                @(evt.TimeInStart?.ToString("hh:mm tt") ?? "--") - @(evt.TimeInEnd?.ToString("hh:mm tt") ?? "--")
+                                            </span>
+                                        </div>
+                                        <div class="schedule-row">
+                                            <span class="schedule-label">⬆ Time Out:</span>
+                                            <span class="schedule-value">
+                                                @(evt.TimeOutStart?.ToString("hh:mm tt") ?? "--") - @(evt.TimeOutEnd?.ToString("hh:mm tt") ?? "--")
+                                            </span>
+                                        </div>
+                                    </div>
+
                                     @if (!string.IsNullOrEmpty(evt.Description))
                                     {
                                         <p class="event-desc">@evt.Description</p>
@@ -182,7 +198,19 @@ else
                                                 title="@(evt.IsActive ? "Mark Completed" : "Mark Ongoing")">
                                             @(evt.IsActive ? "✅" : "🏁")
                                         </button>
-                                        <button class="btn-icon danger" @onclick="() => DeleteEvent(evt)" title="Archive">🗑️</button>
+                                        
+                                        @if (evt.IsActive)
+                                        {
+                                            <button class="btn-icon disabled" disabled title="Cannot delete ongoing event">🗑️</button>
+                                        }
+                                        else if (evt.EventDate >= DateTime.Today)
+                                        {
+                                            <button class="btn-icon danger option-cancel" @onclick="() => ConfirmDeleteEvent(evt)" title="Cancel Event">❌</button>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn-icon danger" @onclick="() => ConfirmDeleteEvent(evt)" title="Delete">🗑️</button>
+                                        }
                                     }
                                     else
                                     {
@@ -206,7 +234,7 @@ else
                     <div class="header-actions">
                         <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/enroll")'>+ Add Student</button>
                         <div class="search-box">
-                            <input type="text" @bind="studentSearch" @bind:after="FilterStudents" 
+                            <input type="text" @bind="studentSearch" @bind:event="oninput" @bind:after="FilterStudents" 
                                    placeholder="Search students..." class="form-control" />
                         </div>
                     </div>
@@ -234,7 +262,7 @@ else
                                         title="@(student.IsActive ? "Deactivate" : "Activate")">
                                     @(student.IsActive ? "🔒" : "🔓")
                                 </button>
-                                <button class="btn-icon danger" @onclick="() => DeleteStudent(student)" title="Delete">
+                                <button class="btn-icon danger" @onclick="() => ConfirmDeleteStudent(student)" title="Delete">
                                     🗑️
                                 </button>
                             </div>
@@ -281,6 +309,8 @@ else
                                             <tr>
                                                 <th>Event</th>
                                                 <th>Date</th>
+                                                <th>Time In</th>
+                                                <th>Time Out</th>
                                                 <th>Status</th>
                                             </tr>
                                         </thead>
@@ -290,6 +320,8 @@ else
                                                 <tr>
                                                     <td>@record.Event.EventName</td>
                                                     <td>@record.Event.EventDate.ToString("MMM dd")</td>
+                                                    <td>@(record.Record.TimeIn?.ToString("hh:mm tt") ?? "-")</td>
+                                                    <td>@(record.Record.TimeOut?.ToString("hh:mm tt") ?? "-")</td>
                                                     <td>
                                                         <span class="status-badge @(record.Record.Status.ToLower())">
                                                             @record.Record.Status
@@ -575,6 +607,23 @@ else
         }
     </div>
 </div>
+
+@if (showConfirmationModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-card confirmation-card">
+            <div class="modal-body">
+                <div class="confirmation-icon">⚠️</div>
+                <h3>Are you sure?</h3>
+                <p>@confirmationMessage</p>
+                <div class="confirmation-actions">
+                    <button class="btn btn-cancel" @onclick="CancelConfirmation">No, Cancel</button>
+                    <button class="btn btn-danger" @onclick="ProceedWithConfirmation">Yes, Proceed</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 }
 
 <style>
@@ -893,6 +942,41 @@ else
         align-items: center;
         gap: var(--space-2);
         margin-top: var(--space-2) !important;
+    }
+
+    .event-schedule-admin {
+        background: var(--neutral-50);
+        border: 1px solid var(--neutral-200);
+        border-radius: var(--radius-md);
+        padding: var(--space-3);
+        margin: var(--space-3) 0;
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+        max-width: 400px;
+    }
+
+    .schedule-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        font-size: 0.875rem;
+    }
+
+    .schedule-label {
+        font-weight: 600;
+        color: var(--neutral-700);
+        min-width: 80px;
+    }
+
+    .schedule-value {
+        font-family: var(--font-mono);
+        color: var(--primary-700);
+        font-weight: 600;
+        background: white;
+        padding: 2px 8px;
+        border-radius: 4px;
+        border: 1px solid var(--neutral-200);
     }
 
     .event-actions {
@@ -1435,6 +1519,37 @@ else
         display: flex;
         gap: var(--space-2);
     }
+    
+    .confirmation-card {
+        max-width: 400px;
+        text-align: center;
+    }
+    
+    .confirmation-icon {
+        font-size: 3rem;
+        margin-bottom: var(--space-4);
+    }
+    
+    .confirmation-actions {
+        display: flex;
+        justify-content: center;
+        gap: var(--space-4);
+        margin-top: var(--space-6);
+    }
+    
+    .btn-danger {
+        background: var(--error-600);
+        color: white;
+        border: none;
+        padding: var(--space-3) var(--space-5);
+        border-radius: var(--radius-md);
+        font-weight: 600;
+        cursor: pointer;
+    }
+    
+    .btn-danger:hover {
+        background: var(--error-700);
+    }
 </style>
 
 @code {
@@ -1549,6 +1664,15 @@ else
 
     private void ShowNewEventForm()
     {
+        int ongoingCount = events.Count(e => e.IsActive);
+        if (ongoingCount >= 3)
+        {
+             confirmationMessage = "Maximum 3 ongoing events allowed.";
+             pendingDeleteEvent = null; 
+             showConfirmationModal = true;
+             return;
+        }
+
         editingEvent = null;
         eventForm = new Event
         {
@@ -1612,6 +1736,33 @@ else
     {
         try
         {
+            // If resuming (setting to Active)
+            if (!evt.IsActive)
+            {
+                // Check if date needs to be changed
+                if (evt.EventDate < DateTime.Today)
+                {
+                    confirmationMessage = "The event date is in the past. Please update the date to resume.";
+                    pendingDeleteEvent = null; // Ensure no delete action
+                    showConfirmationModal = true;
+                    
+                    // Redirect to edit after a moment or let user close
+                    // Better approach: Just open edit form
+                    EditEvent(evt);
+                    return;
+                }
+                
+                // Check limit
+                int ongoingCount = events.Count(e => e.IsActive);
+                if (ongoingCount >= 3)
+                {
+                     confirmationMessage = "Maximum 3 ongoing events allowed.";
+                     pendingDeleteEvent = null; 
+                     showConfirmationModal = true;
+                     return;
+                }
+            }
+            
             evt.IsActive = !evt.IsActive;
             await Task.Run(() => Database.UpdateEvent(evt));
             await LoadData();
@@ -1622,20 +1773,68 @@ else
         }
     }
 
-    private async Task DeleteEvent(Event evt)
+    private async Task ConfirmDeleteEvent(Event evt)
     {
-        if (confirm($"Delete event '{evt.EventName}'?"))
+        if (evt.IsActive)
+        {
+            confirmationMessage = "Cannot delete ongoing events. Please mark as completed first.";
+            // Re-use modal for alert
+            pendingDeleteEvent = null; 
+            showConfirmationModal = true;
+            return;
+        }
+
+        pendingDeleteEvent = evt;
+        pendingDeleteStudent = null;
+        
+        if (!evt.IsActive && evt.EventDate >= DateTime.Today)
+        {
+            confirmationMessage = $"Cancel upcoming event '{evt.EventName}'?";
+        }
+        else
+        {
+            confirmationMessage = $"Delete event '{evt.EventName}'?";
+        }
+        showConfirmationModal = true;
+    }
+
+    private async Task ProceedWithConfirmation()
+    {
+        showConfirmationModal = false;
+        if (pendingDeleteEvent != null)
         {
             try
             {
-                await Task.Run(() => Database.DeleteEvent(evt.Id));
+                await Task.Run(() => Database.DeleteEvent(pendingDeleteEvent.Id));
                 await LoadData();
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error deleting event: {ex.Message}");
             }
+            pendingDeleteEvent = null;
         }
+        else if (pendingDeleteStudent != null)
+        {
+            try
+            {
+                await Task.Run(() => Database.DeleteStudent(pendingDeleteStudent.Id));
+                await LoadData();
+                FilterStudents();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error deleting student: {ex.Message}");
+            }
+            pendingDeleteStudent = null;
+        }
+    }
+
+    private void CancelConfirmation()
+    {
+        showConfirmationModal = false;
+        pendingDeleteEvent = null;
+        pendingDeleteStudent = null;
     }
 
 
@@ -1673,21 +1872,12 @@ else
         }
     }
 
-    private async Task DeleteStudent(Student student)
+    private async Task ConfirmDeleteStudent(Student student)
     {
-        if (confirm($"Delete student '{student.Name}'? This will also delete all fingerprint templates and attendance records."))
-        {
-            try
-            {
-                await Task.Run(() => Database.DeleteStudent(student.Id));
-                await LoadData();
-                FilterStudents();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error deleting student: {ex.Message}");
-            }
-        }
+        pendingDeleteStudent = student;
+        pendingDeleteEvent = null;
+        confirmationMessage = $"Delete student '{student.Name}'? This will also delete all fingerprint templates and attendance records.";
+        showConfirmationModal = true;
     }
 
     private void FilterStudents()
@@ -1733,6 +1923,11 @@ else
         Console.WriteLine($"Confirm: {message}");
         return true;
     }
+
+    private bool showConfirmationModal = false;
+    private string confirmationMessage = "";
+    private Event? pendingDeleteEvent = null;
+    private Student? pendingDeleteStudent = null;
 
     private async Task Logout()
     {

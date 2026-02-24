@@ -657,28 +657,34 @@ namespace AttendanceWeb.Services
         {
             using var conn = GetConnection();
             
+            // Get student's enrollment date to filter events
+            var enrollDateSql = @"SELECT EnrolledDate FROM Students WHERE Id = @StudentId";
+            using var enrollCmd = new SqliteCommand(enrollDateSql, conn);
+            enrollCmd.Parameters.AddWithValue("@StudentId", studentId);
+            var enrollDateStr = enrollCmd.ExecuteScalar()?.ToString();
+            var enrolledDate = !string.IsNullOrEmpty(enrollDateStr) ? DateTime.Parse(enrollDateStr) : DateTime.MinValue;
+
             // Count Present (Records with TimeIn OR Status='Present'/'Late')
-            var countPresentSql = @"SELECT COUNT(*) FROM AttendanceRecords 
-                                    WHERE StudentId = @StudentId 
-                                    AND (TimeIn IS NOT NULL OR Status IN ('Present', 'Late'))";
+            // Only count attendance for events on or after enrollment date
+            var countPresentSql = @"SELECT COUNT(*) FROM AttendanceRecords ar
+                                    JOIN Events e ON ar.EventId = e.Id
+                                    WHERE ar.StudentId = @StudentId 
+                                    AND (ar.TimeIn IS NOT NULL OR ar.Status IN ('Present', 'Late'))
+                                    AND e.EventDate >= @EnrolledDate";
             
             using var cmdPresent = new SqliteCommand(countPresentSql, conn);
             cmdPresent.Parameters.AddWithValue("@StudentId", studentId);
+            cmdPresent.Parameters.AddWithValue("@EnrolledDate", enrolledDate.ToString("yyyy-MM-dd"));
             int present = Convert.ToInt32(cmdPresent.ExecuteScalar());
 
-            // Count Total Events (that are NOT deleted and occurred in the past)
-            // Assuming Absent = Total Past Events - Present Records
-            // Or use explicit 'Absent' status if you mark them. 
-            // Simple logic: Total events passed - Present.
+            // Count Total Events that occurred on or after the student's enrollment date
             var countEventsSql = @"SELECT COUNT(*) FROM Events 
                                    WHERE IsDeleted = 0 
-                                   AND IsActive = 0
-                                   AND EventDate < date('now')"; // Completed events
-            
-            // Correction: If 'IsActive' is used for Ongoing, maybe check Date? 
-            // User requirement: "Ongoing/Completed". I'll use Date logic for robust 'Passed' calculation.
+                                   AND EventDate < date('now')
+                                   AND EventDate >= @EnrolledDate";
             
             using var cmdEvents = new SqliteCommand(countEventsSql, conn);
+            cmdEvents.Parameters.AddWithValue("@EnrolledDate", enrolledDate.ToString("yyyy-MM-dd"));
             int totalPastEvents = Convert.ToInt32(cmdEvents.ExecuteScalar());
             
             int absent = Math.Max(0, totalPastEvents - present);
@@ -690,16 +696,26 @@ namespace AttendanceWeb.Services
         {
             var history = new List<AttendanceInfo>();
             using var conn = GetConnection();
+            
+            // Get student's enrollment date to filter events
+            var enrollDateSql = @"SELECT EnrolledDate FROM Students WHERE Id = @StudentId";
+            using var enrollCmd = new SqliteCommand(enrollDateSql, conn);
+            enrollCmd.Parameters.AddWithValue("@StudentId", studentId);
+            var enrollDateStr = enrollCmd.ExecuteScalar()?.ToString();
+            var enrolledDate = !string.IsNullOrEmpty(enrollDateStr) ? DateTime.Parse(enrollDateStr) : DateTime.MinValue;
+
             var sql = @"SELECT 
                         a.Id, a.StudentId, a.EventId, a.TimeIn, a.TimeOut, a.Status, a.RecordDate,
                         e.Id, e.EventName, e.EventDate, e.Period, e.AcademicYear
                        FROM AttendanceRecords a
                        JOIN Events e ON a.EventId = e.Id
                        WHERE a.StudentId = @StudentId
+                       AND e.EventDate >= @EnrolledDate
                        ORDER BY e.EventDate DESC";
             
             using var cmd = new SqliteCommand(sql, conn);
             cmd.Parameters.AddWithValue("@StudentId", studentId);
+            cmd.Parameters.AddWithValue("@EnrolledDate", enrolledDate.ToString("yyyy-MM-dd"));
             using var reader = cmd.ExecuteReader();
             
             while (reader.Read())
@@ -790,7 +806,7 @@ namespace AttendanceWeb.Services
             using var conn = GetConnection();
             var sql = @"SELECT 
                         a.Id, a.StudentId, a.EventId, a.TimeIn, a.TimeOut, a.Status, a.RecordDate,
-                        s.Id, s.StudentId, s.Name, s.Email, s.Program, s.YearLevel, s.EnrolledDate, s.IsActive,
+                        s.Id, s.StudentId, s.Name, s.Email, s.Program, s.YearLevel, s.EnrolledDate, s.IsActive, s.Section,
                         e.Id, e.EventName
                        FROM AttendanceRecords a
                        JOIN Students s ON a.StudentId = s.Id
@@ -825,12 +841,13 @@ namespace AttendanceWeb.Services
                         Program = reader.IsDBNull(11) ? "" : reader.GetString(11),
                         YearLevel = reader.IsDBNull(12) ? 0 : reader.GetInt32(12),
                         EnrolledDate = DateTime.Parse(reader.GetString(13)),
-                        IsActive = reader.GetInt32(14) == 1
+                        IsActive = reader.GetInt32(14) == 1,
+                        Section = reader.IsDBNull(15) ? "" : reader.GetString(15)
                     },
                     Event = new Event
                     {
-                        Id = reader.GetInt32(15),
-                        EventName = reader.GetString(16)
+                        Id = reader.GetInt32(16),
+                        EventName = reader.GetString(17)
                     }
                 });
             }
