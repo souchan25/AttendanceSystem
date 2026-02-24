@@ -854,6 +854,58 @@ namespace AttendanceWeb.Services
             return records;
         }
 
+        public List<AttendanceInfo> GetAllAttendanceInfo()
+        {
+            var records = new List<AttendanceInfo>();
+            using var conn = GetConnection();
+            var sql = @"SELECT
+                        a.Id, a.StudentId, a.EventId, a.TimeIn, a.TimeOut, a.Status, a.RecordDate,
+                        s.Id, s.StudentId, s.Name, s.Email, s.Program, s.YearLevel, s.EnrolledDate, s.IsActive, s.Section,
+                        e.Id, e.EventName
+                       FROM AttendanceRecords a
+                       JOIN Students s ON a.StudentId = s.Id
+                       JOIN Events e ON a.EventId = e.Id
+                       ORDER BY a.RecordDate DESC";
+
+            using var cmd = new SqliteCommand(sql, conn);
+            using var reader = cmd.ExecuteReader();
+
+            while (reader.Read())
+            {
+                records.Add(new AttendanceInfo
+                {
+                    Record = new AttendanceRecord
+                    {
+                        Id = reader.GetInt32(0),
+                        StudentId = reader.GetInt32(1),
+                        EventId = reader.GetInt32(2),
+                        TimeIn = reader.IsDBNull(3) ? null : DateTime.Parse(reader.GetString(3)),
+                        TimeOut = reader.IsDBNull(4) ? null : DateTime.Parse(reader.GetString(4)),
+                        Status = reader.IsDBNull(5) ? "" : reader.GetString(5),
+                        RecordDate = DateTime.Parse(reader.GetString(6))
+                    },
+                    Student = new Student
+                    {
+                        Id = reader.GetInt32(7),
+                        StudentId = reader.GetString(8),
+                        Name = reader.GetString(9),
+                        Email = reader.IsDBNull(10) ? "" : reader.GetString(10),
+                        Program = reader.IsDBNull(11) ? "" : reader.GetString(11),
+                        YearLevel = reader.IsDBNull(12) ? 0 : reader.GetInt32(12),
+                        EnrolledDate = DateTime.Parse(reader.GetString(13)),
+                        IsActive = reader.GetInt32(14) == 1,
+                        Section = reader.IsDBNull(15) ? "" : reader.GetString(15)
+                    },
+                    Event = new Event
+                    {
+                        Id = reader.GetInt32(16),
+                        EventName = reader.GetString(17)
+                    }
+                });
+            }
+            return records;
+        }
+
         public List<AttendanceRecord> GetAllAttendanceRecords()
         {
             var records = new List<AttendanceRecord>();
