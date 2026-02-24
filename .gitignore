@@ -1,0 +1,41 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+
+# NuGet
+*.nupkg
+*.snupkg
+**/packages/
+project.assets.json
+*.nuget.cache
+*.nuget.props
+*.nuget.targets
+*.nuget.g.props
+*.nuget.g.targets
+*.nuget.dgspec.json
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.csproj.user
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Vendored client libraries (restored via LibMan/NuGet)
+**/wwwroot/lib/
+
+# Temporary/generated files
+tracked_files.txt
+*.log

@@ -37,9 +37,35 @@ else
                 <label>Event</label>
                 <select @bind="selectedEventId" @bind:after="LoadRecords" class="form-control">
                     <option value="0">-- All Events --</option>
-                    @foreach (var evt in events)
+                    @{ var ongoingEvents = events.Where(e => !e.IsDeleted && e.IsActive).OrderByDescending(e => e.EventDate).ToList(); }
+                    @{ var completedEvents = events.Where(e => !e.IsDeleted && !e.IsActive).OrderByDescending(e => e.EventDate).ToList(); }
+                    @{ var archivedEvents = events.Where(e => e.IsDeleted).OrderByDescending(e => e.EventDate).ToList(); }
+                    @if (ongoingEvents.Any())
                     {
-                        <option value="@evt.Id">@evt.EventName (@evt.Period - @evt.AcademicYear)</option>
+                        <optgroup label="Ongoing">
+                            @foreach (var evt in ongoingEvents)
+                            {
+                                <option value="@evt.Id">@evt.EventName (@evt.Period - @evt.AcademicYear)</option>
+                            }
+                        </optgroup>
+                    }
+                    @if (completedEvents.Any())
+                    {
+                        <optgroup label="Completed">
+                            @foreach (var evt in completedEvents)
+                            {
+                                <option value="@evt.Id">@evt.EventName (@evt.Period - @evt.AcademicYear)</option>
+                            }
+                        </optgroup>
+                    }
+                    @if (archivedEvents.Any())
+                    {
+                        <optgroup label="Archived">
+                            @foreach (var evt in archivedEvents)
+                            {
+                                <option value="@evt.Id">@evt.EventName (@evt.Period - @evt.AcademicYear)</option>
+                            }
+                        </optgroup>
                     }
                 </select>
             </div>
@@ -522,7 +548,7 @@ else
     {
         try
         {
-            events = await Task.Run(() => Database.GetAllEvents());
+            events = await Task.Run(() => Database.GetAllEvents(true));
         }
         catch (Exception ex)
         {

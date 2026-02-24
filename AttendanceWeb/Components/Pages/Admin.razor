@@ -3,6 +3,7 @@
 @using AttendanceWeb.Models
 @using AttendanceWeb.Services
 @inject AttendanceDatabase Database
+@inject FingerprintApiClient ApiClient
 @inject AuthService AuthService
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
@@ -258,6 +259,7 @@ else
 
                             <div class="student-actions">
                                 <button class="btn-icon" @onclick="() => ShowStudentHistory(student)" title="View History">📜</button>
+                                <button class="btn-icon" @onclick="() => StartRecapture(student)" title="Recapture Fingerprints">👆</button>
                                 <button class="btn-icon" @onclick="() => ToggleStudentStatus(student)" 
                                         title="@(student.IsActive ? "Deactivate" : "Activate")">
                                     @(student.IsActive ? "🔒" : "🔓")
@@ -336,6 +338,66 @@ else
                         </div>
                     </div>
                 }
+
+                @if (showRecaptureModal && recaptureStudent != null)
+                {
+                    <div class="modal-overlay">
+                        <div class="modal-card" style="max-width: 700px;">
+                            <div class="modal-header">
+                                <h3>🔄 Recapture Fingerprints: @recaptureStudent.Name</h3>
+                                <button class="btn-close" @onclick="CancelRecapture" disabled="@isRecapturing">×</button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="progress-section" style="text-align: center; margin-bottom: 20px;">
+                                    <h4>Fingerprint Samples: @recaptureTemplates.Count / 5</h4>
+                                    <div class="progress-bar" style="width: 100%; height: 12px; background: var(--neutral-200); border-radius: 9999px; overflow: hidden; margin-bottom: 8px;">
+                                        <div style="height: 100%; width: @(recaptureTemplates.Count * 20)%; background: linear-gradient(90deg, var(--success-600), var(--success-500)); border-radius: 9999px; transition: width 0.5s;"></div>
+                                    </div>
+                                    <p style="color: var(--neutral-600); font-size: 0.875rem;">Please scan finger from 5 different angles for better accuracy</p>
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px;">
+                                    @for (int i = 1; i <= 5; i++)
+                                    {
+                                        int sampleNum = i;
+                                        var template = recaptureTemplates.FirstOrDefault(t => t.SampleNumber == sampleNum);
+                                        <div style="border: 2px solid @(template != null ? "var(--success-500)" : "var(--neutral-200)"); border-radius: 12px; padding: 12px; text-align: center; background: @(template != null ? "var(--success-50, #f0fdf4)" : "white");">
+                                            <div style="font-weight: 600; font-size: 0.8rem; margin-bottom: 8px; display: flex; justify-content: space-between;">Sample @sampleNum @if(template != null){<span style="color: var(--success-600);">✓</span>}</div>
+                                            @if (currentRecaptureSample == sampleNum && isRecapturing)
+                                            {
+                                                <div style="padding: 8px;"><div class="spinner" style="width: 24px; height: 24px; margin: 0 auto;"></div><p style="font-size: 0.75rem; margin: 4px 0 0 0;">Scanning...</p></div>
+                                            }
+                                            else if (template != null)
+                                            {
+                                                <div style="font-size: 0.75rem; color: var(--success-600); font-weight: 600;">Q: @template.Quality</div>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn-capture-small" @onclick="() => RecaptureSample(sampleNum)" disabled="@(isRecapturing || recaptureTemplates.Count != sampleNum - 1)">
+                                                    👆 Capture
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(recaptureMessage))
+                                {
+                                    <div class="alert @(recaptureMessage.Contains("✓") ? "alert-success" : "alert-error")">
+                                        @recaptureMessage
+                                    </div>
+                                }
+
+                                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--neutral-200);">
+                                    <button class="btn btn-cancel" @onclick="CancelRecapture" disabled="@isRecapturing">Cancel</button>
+                                    <button class="btn btn-primary" @onclick="SaveRecapture" disabled="@(recaptureTemplates.Count < 5 || isSavingRecapture)">
+                                        @(isSavingRecapture ? "Saving..." : "Save New Fingerprints ✓")
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
             </div>
         }
 
@@ -349,9 +411,35 @@ else
                         <div class="form-group" style="margin: 0; min-width: 300px;">
                             <select @bind="selectedEventId" @bind:after="() => LoadEventRecords(selectedEventId)" class="form-control">
                                 <option value="0">All Events</option>
-                                @foreach (var evt in events.OrderByDescending(e => e.EventDate))
+                                @{ var ongoingEvts = events.Where(e => !e.IsDeleted && e.IsActive).OrderByDescending(e => e.EventDate).ToList(); }
+                                @{ var completedEvts = events.Where(e => !e.IsDeleted && !e.IsActive).OrderByDescending(e => e.EventDate).ToList(); }
+                                @{ var archivedEvts = events.Where(e => e.IsDeleted).OrderByDescending(e => e.EventDate).ToList(); }
+                                @if (ongoingEvts.Any())
                                 {
-                                    <option value="@evt.Id">@evt.EventName (@evt.Period - @evt.AcademicYear)</option>
+                                    <optgroup label="Ongoing">
+                                        @foreach (var evt in ongoingEvts)
+                                        {
+                                            <option value="@evt.Id">@evt.EventName (@evt.Period - @evt.AcademicYear)</option>
+                                        }
+                                    </optgroup>
+                                }
+                                @if (completedEvts.Any())
+                                {
+                                    <optgroup label="Completed">
+                                        @foreach (var evt in completedEvts)
+                                        {
+                                            <option value="@evt.Id">@evt.EventName (@evt.Period - @evt.AcademicYear)</option>
+                                        }
+                                    </optgroup>
+                                }
+                                @if (archivedEvts.Any())
+                                {
+                                    <optgroup label="Archived">
+                                        @foreach (var evt in archivedEvts)
+                                        {
+                                            <option value="@evt.Id">@evt.EventName (@evt.Period - @evt.AcademicYear)</option>
+                                        }
+                                    </optgroup>
                                 }
                             </select>
                         </div>
@@ -533,17 +621,26 @@ else
 
                             <div class="form-group">
                                 <label>Current Password *</label>
-                                <input type="password" @bind="currentPassword" class="form-control" />
+                                <div class="password-wrapper">
+                                    <input type="@(showCurrentPw ? "text" : "password")" @bind="currentPassword" class="form-control" />
+                                    <button type="button" class="btn-toggle-pw" @onclick="() => showCurrentPw = !showCurrentPw" tabindex="-1">@(showCurrentPw ? "🙈" : "👁️")</button>
+                                </div>
                             </div>
 
                             <div class="form-group">
                                 <label>New Password *</label>
-                                <input type="password" @bind="newPassword" class="form-control" />
+                                <div class="password-wrapper">
+                                    <input type="@(showNewPw ? "text" : "password")" @bind="newPassword" class="form-control" />
+                                    <button type="button" class="btn-toggle-pw" @onclick="() => showNewPw = !showNewPw" tabindex="-1">@(showNewPw ? "🙈" : "👁️")</button>
+                                </div>
                             </div>
 
                             <div class="form-group">
                                 <label>Confirm New Password *</label>
-                                <input type="password" @bind="confirmPassword" class="form-control" />
+                                <div class="password-wrapper">
+                                    <input type="@(showConfirmPw ? "text" : "password")" @bind="confirmPassword" class="form-control" />
+                                    <button type="button" class="btn-toggle-pw" @onclick="() => showConfirmPw = !showConfirmPw" tabindex="-1">@(showConfirmPw ? "🙈" : "👁️")</button>
+                                </div>
                             </div>
 
                             <div class="form-actions">
@@ -585,7 +682,10 @@ else
 
                             <div class="form-group">
                                 <label>Password *</label>
-                                <input type="password" @bind="adminForm.Password" class="form-control" placeholder="Enter password" />
+                                <div class="password-wrapper">
+                                    <input type="@(showAdminPw ? "text" : "password")" @bind="adminForm.Password" class="form-control" placeholder="Enter password" />
+                                    <button type="button" class="btn-toggle-pw" @onclick="() => showAdminPw = !showAdminPw" tabindex="-1">@(showAdminPw ? "🙈" : "👁️")</button>
+                                </div>
                             </div>
 
                             <div class="form-actions">
@@ -1573,6 +1673,67 @@ else
     .btn-danger:hover {
         background: var(--error-700);
     }
+
+    .btn-capture-small {
+        padding: 6px 10px;
+        border: 2px dashed var(--primary-300);
+        background: var(--primary-50);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-weight: 500;
+        color: var(--primary-700);
+        font-size: 0.75rem;
+        width: 100%;
+    }
+
+    .btn-capture-small:hover:not(:disabled) {
+        background: var(--primary-100);
+        border-color: var(--primary-500);
+        border-style: solid;
+    }
+
+    .btn-capture-small:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .spinner {
+        border: 3px solid var(--neutral-200);
+        border-top-color: var(--primary-600);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .password-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .password-wrapper .form-control {
+        padding-right: 44px;
+    }
+
+    .btn-toggle-pw {
+        position: absolute;
+        right: 8px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 1.1rem;
+        padding: 4px;
+        opacity: 0.6;
+        transition: opacity 0.2s;
+    }
+
+    .btn-toggle-pw:hover {
+        opacity: 1;
+    }
 </style>
 
 @code {
@@ -1602,6 +1763,10 @@ else
     private string confirmPassword = "";
     private string passwordChangeMessage = "";
     private bool passwordChangeSuccess = false;
+    private bool showCurrentPw = false;
+    private bool showNewPw = false;
+    private bool showConfirmPw = false;
+    private bool showAdminPw = false;
 
     // Settings Tab - Admin Management
     private bool showAddAdminForm = false;
@@ -2179,6 +2344,111 @@ else
         catch (Exception ex)
         {
             Console.WriteLine($"Fullscreen error: {ex.Message}");
+        }
+    }
+
+    // Fingerprint Recapture
+    private bool showRecaptureModal = false;
+    private Student? recaptureStudent = null;
+    private List<FingerprintTemplate> recaptureTemplates = new();
+    private bool isRecapturing = false;
+    private bool isSavingRecapture = false;
+    private int currentRecaptureSample = 0;
+    private string recaptureMessage = "";
+
+    private void StartRecapture(Student student)
+    {
+        recaptureStudent = student;
+        recaptureTemplates.Clear();
+        currentRecaptureSample = 0;
+        recaptureMessage = "";
+        showRecaptureModal = true;
+    }
+
+    private void CancelRecapture()
+    {
+        showRecaptureModal = false;
+        recaptureStudent = null;
+        recaptureTemplates.Clear();
+        recaptureMessage = "";
+    }
+
+    private async Task RecaptureSample(int sampleNumber)
+    {
+        isRecapturing = true;
+        currentRecaptureSample = sampleNumber;
+        recaptureMessage = $"Capturing sample {sampleNumber}...";
+        StateHasChanged();
+
+        try
+        {
+            var response = await ApiClient.CaptureAsync();
+            if (response.Success && !string.IsNullOrEmpty(response.Template))
+            {
+                recaptureTemplates.Add(new FingerprintTemplate
+                {
+                    SampleNumber = sampleNumber,
+                    TemplateData = response.Template,
+                    Quality = response.Quality,
+                    CapturedDate = DateTime.Now
+                });
+                recaptureMessage = $"✓ Sample {sampleNumber} captured! Quality: {response.Quality}";
+            }
+            else
+            {
+                recaptureMessage = $"❌ Failed: {response.Message}";
+            }
+        }
+        catch (Exception ex)
+        {
+            recaptureMessage = $"❌ Error: {ex.Message}";
+        }
+        finally
+        {
+            isRecapturing = false;
+            currentRecaptureSample = 0;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveRecapture()
+    {
+        if (recaptureStudent == null || recaptureTemplates.Count < 5) return;
+
+        isSavingRecapture = true;
+        recaptureMessage = "Saving new fingerprints...";
+        StateHasChanged();
+
+        try
+        {
+            // Delete old templates
+            await Task.Run(() => Database.DeleteStudentTemplates(recaptureStudent.Id));
+
+            // Save new templates
+            foreach (var template in recaptureTemplates)
+            {
+                template.StudentId = recaptureStudent.Id;
+                await Task.Run(() => Database.AddFingerprintTemplate(template));
+            }
+
+            recaptureMessage = "✓ Fingerprints recaptured successfully!";
+            StateHasChanged();
+            await Task.Delay(1500);
+
+            showRecaptureModal = false;
+            recaptureStudent = null;
+            recaptureTemplates.Clear();
+            recaptureMessage = "";
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            recaptureMessage = $"❌ Error: {ex.Message}";
+        }
+        finally
+        {
+            isSavingRecapture = false;
+            StateHasChanged();
         }
     }
 

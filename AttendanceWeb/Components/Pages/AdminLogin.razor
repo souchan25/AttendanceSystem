@@ -32,7 +32,12 @@
         
         <div class="form-group">
             <label>Password</label>
-            <input type="password" class="form-control" @bind="password" placeholder="Enter password" @onkeypress="HandleKeyPress" />
+            <div class="password-wrapper">
+                <input type="@(showLoginPassword ? "text" : "password")" class="form-control" @bind="password" placeholder="Enter password" @onkeypress="HandleKeyPress" />
+                <button type="button" class="btn-toggle-pw" @onclick="() => showLoginPassword = !showLoginPassword" tabindex="-1">
+                    @(showLoginPassword ? "🙈" : "👁️")
+                </button>
+            </div>
         </div>
 
         <button class="btn btn-primary btn-block" @onclick="LoginWithPassword" disabled="@isLoading">
@@ -140,6 +145,32 @@
         background: rgba(255, 255, 255, 0.3);
         transform: scale(1.05);
     }
+
+    .password-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .password-wrapper .form-control {
+        padding-right: 44px;
+    }
+
+    .btn-toggle-pw {
+        position: absolute;
+        right: 8px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 1.1rem;
+        padding: 4px;
+        opacity: 0.6;
+        transition: opacity 0.2s;
+    }
+
+    .btn-toggle-pw:hover {
+        opacity: 1;
+    }
 </style>
 
 @code {
@@ -148,6 +179,7 @@
     private string errorMessage = "";
     private bool isLoading = false;
     private bool isFullscreen = false;
+    private bool showLoginPassword = false;
 
     private async Task HandleKeyPress(KeyboardEventArgs e)
     {

@@ -305,6 +305,15 @@ namespace AttendanceWeb.Services
             return templates;
         }
 
+        public void DeleteStudentTemplates(int studentId)
+        {
+            using var conn = GetConnection();
+            var sql = "DELETE FROM FingerprintTemplates WHERE StudentId = @StudentId";
+            using var cmd = new SqliteCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@StudentId", studentId);
+            cmd.ExecuteNonQuery();
+        }
+
         public List<(int StudentId, List<FingerprintTemplate> Templates)> GetAllStudentTemplates()
         {
             var result = new List<(int, List<FingerprintTemplate>)>();
