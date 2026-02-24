@@ -617,7 +617,14 @@ else
             captureMessage = "✓ Enrollment completed successfully!";
             await Task.Delay(1500);
 
-            Navigation.NavigateTo("/admin/dashboard");
+            // Reset form for next student
+            newStudent = new Student { YearLevel = 1 };
+            capturedTemplates.Clear();
+            showEnrollmentForm = false;
+            isSaving = false;
+            captureMessage = "";
+            errorMessage = "";
+            StateHasChanged();
         }
         catch (Exception ex)
         {

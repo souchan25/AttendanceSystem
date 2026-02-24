@@ -205,7 +205,7 @@ else
                                         }
                                         else if (evt.EventDate >= DateTime.Today)
                                         {
-                                            <button class="btn-icon danger option-cancel" @onclick="() => ConfirmDeleteEvent(evt)" title="Cancel Event">❌</button>
+                                            <button class="btn-icon disabled" disabled title="Only past events can be deleted">🗑️</button>
                                         }
                                         else
                                         {
@@ -363,6 +363,16 @@ else
                                 <option value="4">4th Year</option>
                             </select>
                         </div>
+                        <div class="form-group" style="margin: 0; width: 150px;">
+                            <select @bind="selectedSectionFilter" @bind:after="FilterEventRecords" class="form-control">
+                                <option value="All">All Sections</option>
+                                <option value="A">Section A</option>
+                                <option value="B">Section B</option>
+                                <option value="C">Section C</option>
+                                <option value="D">Section D</option>
+                                <option value="E">Section E</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -374,7 +384,7 @@ else
                                 <tr>
                                     <th>Student ID</th>
                                     <th>Name</th>
-                                    <th>Program</th>
+                                    <th>Program/Sec</th>
                                     <th>Time In</th>
                                     <th>Time Out</th>
                                     <th>Status</th>
@@ -392,7 +402,7 @@ else
                                     <tr>
                                         <td>@record.Student.StudentId</td>
                                         <td><strong>@record.Student.Name</strong></td>
-                                        <td>@($"{record.Student.Program} Y{record.Student.YearLevel}")</td>
+                                        <td>@($"{record.Student.Program} Y{record.Student.YearLevel}" + (string.IsNullOrEmpty(record.Student.Section) ? "" : $" - {record.Student.Section}"))</td>
                                         <td>@(record.Record.TimeIn?.ToString("hh:mm tt") ?? "-")</td>
                                         <td>@(record.Record.TimeOut?.ToString("hh:mm tt") ?? "-")</td>
                                         <td><span class="status-badge @statusClass">@status</span></td>
@@ -424,7 +434,7 @@ else
                 <h2>System Statistics</h2>
 
                 <div class="stats-grid">
-                    <div class="stat-card">
+                    <div class="stat-card clickable" @onclick='() => activeTab = "students"'>
                         <div class="stat-icon">👥</div>
                         <div class="stat-content">
                             <div class="stat-value">@students.Count</div>
@@ -433,7 +443,7 @@ else
                         </div>
                     </div>
 
-                    <div class="stat-card">
+                    <div class="stat-card clickable" @onclick='() => activeTab = "events"'>
                         <div class="stat-icon">📅</div>
                         <div class="stat-content">
                             <div class="stat-value">@events.Count</div>
@@ -442,7 +452,7 @@ else
                         </div>
                     </div>
 
-                    <div class="stat-card">
+                    <div class="stat-card clickable" @onclick='() => activeTab = "students"'>
                         <div class="stat-icon">👆</div>
                         <div class="stat-content">
                             <div class="stat-value">@totalTemplates</div>
@@ -451,7 +461,7 @@ else
                         </div>
                     </div>
 
-                    <div class="stat-card">
+                    <div class="stat-card clickable" @onclick='() => activeTab = "records"'>
                         <div class="stat-icon">✓</div>
                         <div class="stat-content">
                             <div class="stat-value">@totalAttendance</div>
@@ -1136,6 +1146,10 @@ else
         box-shadow: var(--shadow-lg);
     }
 
+    .stat-card.clickable {
+        cursor: pointer;
+    }
+
     .stat-icon {
         font-size: 3rem;
         width: 72px;
@@ -1556,6 +1570,7 @@ else
     private string eventFilter = "Ongoing";
     private string activeTab = "events";
     private string selectedYearFilter = "All"; // Filter for attendance records
+    private string selectedSectionFilter = "All"; // Filter for attendance records
     private List<Event> events = new();
     private List<Student> students = new();
     private List<Student> filteredStudents = new();
@@ -1650,14 +1665,24 @@ else
 
     private void FilterEventRecords()
     {
-        if (selectedYearFilter == "All")
+        var query = allEventRecords.AsQueryable();
+
+        if (selectedYearFilter != "All" && int.TryParse(selectedYearFilter, out int year))
         {
-            eventRecords = allEventRecords.ToList();
+            query = query.Where(r => r.Student.YearLevel == year);
         }
-        else if (int.TryParse(selectedYearFilter, out int year))
+
+        if (selectedSectionFilter != "All")
         {
-            eventRecords = allEventRecords.Where(r => r.Student.YearLevel == year).ToList();
+            query = query.Where(r => r.Student.Section == selectedSectionFilter);
         }
+
+        eventRecords = query
+            .OrderBy(r => r.Student.Section)
+            .ThenBy(r => r.Student.YearLevel)
+            .ThenBy(r => r.Student.Name)
+            .ToList();
+
         StateHasChanged();
     }
 
@@ -1777,24 +1802,23 @@ else
     {
         if (evt.IsActive)
         {
-            confirmationMessage = "Cannot delete ongoing events. Please mark as completed first.";
-            // Re-use modal for alert
+            confirmationMessage = "Cannot cancel ongoing events.";
             pendingDeleteEvent = null; 
+            showConfirmationModal = true;
+            return;
+        }
+
+        if (evt.EventDate >= DateTime.Today)
+        {
+            confirmationMessage = "Only past events can be deleted.";
+            pendingDeleteEvent = null;
             showConfirmationModal = true;
             return;
         }
 
         pendingDeleteEvent = evt;
         pendingDeleteStudent = null;
-        
-        if (!evt.IsActive && evt.EventDate >= DateTime.Today)
-        {
-            confirmationMessage = $"Cancel upcoming event '{evt.EventName}'?";
-        }
-        else
-        {
-            confirmationMessage = $"Delete event '{evt.EventName}'?";
-        }
+        confirmationMessage = $"Delete event '{evt.EventName}'?";
         showConfirmationModal = true;
     }
 
@@ -1967,9 +1991,9 @@ else
             return;
         }
 
-        if (newPassword.Length < 4)
+        if (!System.Text.RegularExpressions.Regex.IsMatch(newPassword, @"^(?=.*[a-zA-Z])(?=.*\d)(?=.*[\W_]).{4,}$"))
         {
-            passwordChangeMessage = "Password must be at least 4 characters.";
+            passwordChangeMessage = "Password must contain letters, numbers, and special characters.";
             return;
         }
 
@@ -2043,9 +2067,9 @@ else
             return;
         }
 
-        if (adminForm.Password.Length < 4)
+        if (!System.Text.RegularExpressions.Regex.IsMatch(adminForm.Password, @"^(?=.*[a-zA-Z])(?=.*\d)(?=.*[\W_]).{4,}$"))
         {
-            adminFormMessage = "Password must be at least 4 characters.";
+            adminFormMessage = "Password must contain letters, numbers, and special characters.";
             return;
         }
 
