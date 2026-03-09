@@ -12,6 +12,7 @@ namespace AttendanceWeb.Models
         public string Section { get; set; } = ""; // Added Section (A-E)
         public DateTime EnrolledDate { get; set; }
         public bool IsActive { get; set; } = true;
+        public bool IsVerified { get; set; } = false; // Fingerprints enrolled
     }
 
     public class FingerprintTemplate
@@ -33,6 +34,7 @@ namespace AttendanceWeb.Models
         public DateTime? TimeOut { get; set; }
         public string Status { get; set; } = ""; // Present, Late, Absent
         public DateTime RecordDate { get; set; }
+        public bool IsDeleted { get; set; } = false;
     }
 
     public class Event
@@ -43,6 +45,7 @@ namespace AttendanceWeb.Models
         public DateTime EventDate { get; set; }
         public string Period { get; set; } = ""; // Midterm, Final
         public string AcademicYear { get; set; } = "";
+        public string Semester { get; set; } = "First"; // First, Second
         
         // Time windows for attendance
         public TimeOnly? TimeInStart { get; set; }
@@ -54,6 +57,15 @@ namespace AttendanceWeb.Models
         public bool IsDeleted { get; set; } = false;
     }
 
+    public class SanctionRule
+    {
+        public int Id { get; set; }
+        public string Semester { get; set; } = "First"; // First, Second
+        public int AbsenceCount { get; set; } // 1,2,3,4 — 4 means "4 or more" for Second Semester
+        public string SanctionDescription { get; set; } = "";
+        public bool IsOrMore { get; set; } = false; // true = "X or more absences"
+    }
+
     public class Admin
     {
         public int Id { get; set; }
@@ -62,6 +74,20 @@ namespace AttendanceWeb.Models
         public string Name { get; set; } = "";
         public string TemplateData { get; set; } = ""; // Admin fingerprint (optional now)
         public DateTime CreatedDate { get; set; }
+        public DateTime? LastLogin { get; set; }
+        public string SecurityQuestion { get; set; } = "";
+        public string SecurityAnswer { get; set; } = "";
+    }
+
+    public class ActivityLog
+    {
+        public int Id { get; set; }
+        public int? AdminId { get; set; }
+        public string AdminUsername { get; set; } = "";
+        public string Action { get; set; } = ""; // Create, Update, Delete
+        public string Target { get; set; } = ""; // Student, Event, Sanction, Admin
+        public string Details { get; set; } = "";
+        public DateTime Timestamp { get; set; }
     }
 
     // View Models
@@ -78,5 +104,13 @@ namespace AttendanceWeb.Models
         public Student Student { get; set; } = new();
         public AttendanceRecord Record { get; set; } = new();
         public Event Event { get; set; } = new();
+    }
+
+    public class StudentSanctionInfo
+    {
+        public string Semester { get; set; } = "";
+        public string AcademicYear { get; set; } = "";
+        public int AbsenceCount { get; set; }
+        public string SanctionDescription { get; set; } = "";
     }
 }

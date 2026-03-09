@@ -16,6 +16,9 @@
 <body>
     <Routes />
     <script src="_framework/blazor.web.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
         // Simple fullscreen toggle function
         window.toggleFullscreen = function () {
@@ -57,7 +60,6 @@
         
         // Keep old functions for backwards compatibility
         window.enterFullscreen = function() {
-            console.log('enterFullscreen called');
             var elem = document.documentElement;
             if (elem.requestFullscreen) {
                 elem.requestFullscreen().catch(err => console.error('Error:', err));
@@ -67,13 +69,10 @@
                 elem.mozRequestFullScreen();
             } else if (elem.msRequestFullscreen) {
                 elem.msRequestFullscreen();
-            } else {
-                alert('Fullscreen not supported. Press F11 instead.');
             }
         };
         
         window.exitFullscreen = function() {
-            console.log('exitFullscreen called');
             if (document.exitFullscreen) {
                 document.exitFullscreen().catch(err => console.error('Error:', err));
             } else if (document.webkitExitFullscreen) {
@@ -90,11 +89,45 @@
             document.addEventListener(event, function() {
                 var isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || 
                                      document.mozFullScreenElement || document.msFullscreenElement);
-                console.log('Fullscreen state changed:', isFullscreen);
             });
         });
 
-        console.log('Fullscreen API ready');
+        window.downloadFile = function(fileName, contentType, base64Data) {
+            const link = document.createElement('a');
+            link.download = fileName;
+            link.href = `data:${contentType};base64,${base64Data}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        window.exportToExcel = function(data, fileName) {
+            const worksheet = XLSX.utils.json_to_sheet(data);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Records");
+            XLSX.writeFile(workbook, fileName);
+        };
+
+        window.exportToPDF = function(title, headers, data, fileName) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            doc.setFontSize(18);
+            doc.text(title, 14, 22);
+            doc.setFontSize(11);
+            doc.setTextColor(100);
+            doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
+            
+            doc.autoTable({
+                head: [headers],
+                body: data,
+                startY: 35,
+                theme: 'striped',
+                headStyles: { fillColor: [79, 70, 229] }
+            });
+            
+            doc.save(fileName);
+        };
     </script>
 </body>
 

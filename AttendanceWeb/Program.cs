@@ -11,6 +11,7 @@ builder.Services.AddRazorComponents()
 builder.Services.AddSingleton<AttendanceDatabase>();
 builder.Services.AddSingleton<FingerprintApiClient>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddSingleton<StudentRecordsAccessService>();
 
 var app = builder.Build();
 

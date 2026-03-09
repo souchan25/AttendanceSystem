@@ -4,6 +4,7 @@
 @using AttendanceWeb.Services
 @inject AttendanceDatabase Database
 @inject FingerprintApiClient ApiClient
+@inject StudentRecordsAccessService RecordsAccess
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 @layout AttendanceWeb.Components.Layout.StudentLayout
@@ -148,15 +149,37 @@
             </div>
             
             <div class="system-status-card">
-                 <h4>System Status</h4>
-                 <div class="status-row">
-                     <span>Scanner:</span>
-                     <span class="status-badge ready">Ready</span>
-                 </div>
-                 <div class="status-row">
-                     <span>Network:</span>
-                     <span class="status-badge online">Online</span>
-                 </div>
+                 <h4>View My Attendance</h4>
+                 @if (isVerifyingForRecords)
+                 {
+                     <div class="verifying-status">
+                         <div class="pulse-icon">👆</div>
+                         <p>@verificationMessage</p>
+                         @if (!string.IsNullOrEmpty(verificationHint))
+                         {
+                             <p class="verification-hint">@verificationHint</p>
+                         }
+                     </div>
+                 }
+                 else if (identifiedStudent != null)
+                 {
+                     <div class="identified-student-info">
+                         <div class="student-avatar-small">@GetInitials(identifiedStudent.Name)</div>
+                         <div class="student-name-small">@identifiedStudent.Name</div>
+                         <button class="btn-view-records" @onclick="NavigateToRecords">
+                             View My Records 📋
+                         </button>
+                     </div>
+                 }
+                 else
+                 {
+                     <button class="btn-view-records" @onclick="StartVerificationForRecords" disabled="@isVerifyingForRecords">
+                         View My Records 📋
+                     </button>
+                     <div class="mini-status">
+                         <span>Fingerprint scan required for records</span>
+                     </div>
+                 }
             </div>
         </aside>
     </div>
@@ -462,6 +485,33 @@
     }
     @@keyframes spin { to { transform: rotate(360deg); } }
 
+    .btn-view-records {
+        width: 100%; padding: 16px; background: white; color: var(--primary-700);
+        border: none; border-radius: 16px; font-weight: 800; font-size: 1.1rem;
+        cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-view-records:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.3); background: #f8fafc; }
+    .btn-view-records:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    
+    .verifying-status { text-align: center; padding: 10px 0; }
+    .pulse-icon { font-size: 2.5rem; margin-bottom: 8px; animation: pulse-white 1.5s infinite; }
+    @@keyframes pulse-white { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
+    .verification-hint { font-size: 0.75rem; opacity: 0.7; margin-top: 4px; }
+    
+    .identified-student-info { text-align: center; padding: 12px 0; }
+    .student-avatar-small { 
+        width: 60px; height: 60px; border-radius: 50%; 
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white; font-size: 1.5rem; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        margin: 0 auto 8px auto;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .student-name-small { font-size: 1rem; font-weight: 700; margin-bottom: 12px; color: white; }
+    
+    .mini-status { font-size: 0.8rem; opacity: 0.8; text-align: center; }
+
     @@media (max-width: 900px) {
         .portal-body { flex-direction: column; overflow-y: auto; }
         .events-grid { overflow-y: visible; }
@@ -473,8 +523,11 @@
     private List<Event> activeEvents = new();
     private bool isLoading = true;
     private bool isReinitializing = false;
+    private bool isVerifyingForRecords = false;
     private string statusMessage = "";
-    private bool isFullscreen = false;
+    private string verificationMessage = "";
+    private string verificationHint = "";
+    private Student? identifiedStudent = null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -506,6 +559,114 @@
         await Task.Delay(3000);
         statusMessage = "";
         StateHasChanged();
+    }
+
+    private async Task StartVerificationForRecords()
+    {
+        if (isVerifyingForRecords) return;
+        
+        isVerifyingForRecords = true;
+        identifiedStudent = null;
+        verificationMessage = "⏳ Place your finger on the scanner...";
+        verificationHint = "Capturing fingerprint...";
+        StateHasChanged();
+
+        try
+        {
+            var captureResult = await ApiClient.CaptureAsync();
+            
+            if (!captureResult.Success || string.IsNullOrEmpty(captureResult.Template))
+            {
+                verificationMessage = "❌ Scan failed";
+                verificationHint = captureResult.Message ?? "Please try again";
+                await Task.Delay(3000);
+                isVerifyingForRecords = false;
+                StateHasChanged();
+                // Re-init if failed
+                _ = ReinitializeScanner();
+                return;
+            }
+
+            verificationMessage = "🔍 Identifying student...";
+            verificationHint = "Please wait...";
+            StateHasChanged();
+
+            // Identify the student
+            var student = await IdentifyStudentAsync(captureResult.Template);
+
+            if (student == null)
+            {
+                verificationMessage = "❌ Not recognized";
+                verificationHint = "Please make sure you are enrolled";
+                await Task.Delay(3000);
+                isVerifyingForRecords = false;
+                StateHasChanged();
+                return;
+            }
+
+            // Student identified successfully
+            identifiedStudent = student;
+            verificationMessage = "✅ Student Identified!";
+            verificationHint = $"Welcome, {student.Name}";
+            
+            // Auto-clear after 30 seconds if user doesn't click
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(30000);
+                if (identifiedStudent != null)
+                {
+                    identifiedStudent = null;
+                    isVerifyingForRecords = false;
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            verificationMessage = "❌ Error occurred";
+            verificationHint = ex.Message;
+            await Task.Delay(3000);
+        }
+        finally
+        {
+            isVerifyingForRecords = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<Student?> IdentifyStudentAsync(string capturedTemplate)
+    {
+        var allStudentTemplates = Database.GetAllStudentTemplates();
+
+        foreach (var (studentId, templates) in allStudentTemplates)
+        {
+            foreach (var template in templates)
+            {
+                var response = await ApiClient.CompareTemplatesAsync(capturedTemplate, template.TemplateData);
+                if (response.Success)
+                {
+                    return Database.GetStudent(studentId);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private void NavigateToRecords()
+    {
+        if (identifiedStudent == null) return;
+        RecordsAccess.GrantAccess(identifiedStudent.Id);
+        Navigation.NavigateTo($"/myrecords/{identifiedStudent.Id}");
+    }
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return "?";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+        return name[0].ToString().ToUpper();
     }
 
     private async Task LoadActiveEvents()

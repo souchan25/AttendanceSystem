@@ -41,7 +41,8 @@ namespace AttendanceWeb.Services
                     Program TEXT,
                     YearLevel INTEGER,
                     EnrolledDate TEXT NOT NULL,
-                    IsActive INTEGER DEFAULT 1
+                    IsActive INTEGER DEFAULT 1,
+                    IsVerified INTEGER DEFAULT 0
                 );
 
                 CREATE TABLE IF NOT EXISTS FingerprintTemplates (
@@ -89,7 +90,18 @@ namespace AttendanceWeb.Services
                     Password TEXT DEFAULT '',
                     Name TEXT NOT NULL,
                     TemplateData TEXT NOT NULL,
-                    CreatedDate TEXT NOT NULL
+                    CreatedDate TEXT NOT NULL,
+                    LastLogin TEXT
+                );
+                
+                CREATE TABLE IF NOT EXISTS ActivityLogs (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    AdminId INTEGER,
+                    AdminUsername TEXT,
+                    Action TEXT NOT NULL,
+                    Target TEXT NOT NULL,
+                    Details TEXT,
+                    Timestamp TEXT NOT NULL
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_student_id ON Students(StudentId);
@@ -108,6 +120,45 @@ namespace AttendanceWeb.Services
             try { using var c = new SqliteCommand("ALTER TABLE Events ADD COLUMN IsDeleted INTEGER DEFAULT 0", conn); c.ExecuteNonQuery(); } catch { }
             try { using var c = new SqliteCommand("ALTER TABLE Admins ADD COLUMN Password TEXT DEFAULT ''", conn); c.ExecuteNonQuery(); } catch { }
             try { using var c = new SqliteCommand("ALTER TABLE Students ADD COLUMN Section TEXT DEFAULT ''", conn); c.ExecuteNonQuery(); } catch { }
+            try { using var c = new SqliteCommand("ALTER TABLE Events ADD COLUMN Semester TEXT DEFAULT 'First'", conn); c.ExecuteNonQuery(); } catch { }
+            try { using var c = new SqliteCommand("ALTER TABLE AttendanceRecords ADD COLUMN IsDeleted INTEGER DEFAULT 0", conn); c.ExecuteNonQuery(); } catch { }
+            try { using var c = new SqliteCommand("ALTER TABLE Admins ADD COLUMN LastLogin TEXT", conn); c.ExecuteNonQuery(); } catch { }
+            try { using var c = new SqliteCommand("ALTER TABLE Students ADD COLUMN IsVerified INTEGER DEFAULT 0", conn); c.ExecuteNonQuery(); } catch { }
+            try { using var c = new SqliteCommand("ALTER TABLE Admins ADD COLUMN SecurityQuestion TEXT DEFAULT ''", conn); c.ExecuteNonQuery(); } catch { }
+            try { using var c = new SqliteCommand("ALTER TABLE Admins ADD COLUMN SecurityAnswer TEXT DEFAULT ''", conn); c.ExecuteNonQuery(); } catch { }
+
+            // Create SanctionRules table
+            var createSanctionRules = @"
+                CREATE TABLE IF NOT EXISTS SanctionRules (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Semester TEXT NOT NULL,
+                    AbsenceCount INTEGER NOT NULL,
+                    SanctionDescription TEXT NOT NULL,
+                    IsOrMore INTEGER DEFAULT 0
+                );
+            ";
+            using var cmdSanction = new SqliteCommand(createSanctionRules, conn);
+            cmdSanction.ExecuteNonQuery();
+
+            // Seed default sanction rules if table is empty
+            using var countCmd = new SqliteCommand("SELECT COUNT(*) FROM SanctionRules", conn);
+            var ruleCount = Convert.ToInt32(countCmd.ExecuteScalar());
+            if (ruleCount == 0)
+            {
+                var seedSql = @"
+                    INSERT INTO SanctionRules (Semester, AbsenceCount, SanctionDescription, IsOrMore) VALUES
+                    ('First', 1, '2 sako, 1 trapo', 0),
+                    ('First', 2, '3 sako, 1 trapo', 0),
+                    ('First', 3, '4 sako, 1 trapo', 0),
+                    ('First', 4, '1 dustpan, 1 paypay, 1 trapo', 0),
+                    ('Second', 1, '1 hour Ground Improvement', 0),
+                    ('Second', 2, '1 pair shoe coat', 0),
+                    ('Second', 3, '1 Rim of bond paper (any size)', 0),
+                    ('Second', 4, '2 silhig bukog, 1 paypay, 1 dustpan', 1);
+                ";
+                using var seedCmd = new SqliteCommand(seedSql, conn);
+                seedCmd.ExecuteNonQuery();
+            }
 
             // Ensure default admin has a password if it's missing (Fix for legacy/broken users)
             try { 
@@ -116,12 +167,64 @@ namespace AttendanceWeb.Services
             } catch { }
         }
 
+        public void LogActivity(int? adminId, string username, string action, string target, string details = "")
+        {
+            try
+            {
+                using var conn = GetConnection();
+                var sql = @"INSERT INTO ActivityLogs (AdminId, AdminUsername, Action, Target, Details, Timestamp)
+                           VALUES (@AdminId, @Username, @Action, @Target, @Details, @Timestamp)";
+                using var cmd = new SqliteCommand(sql, conn);
+                cmd.Parameters.AddWithValue("@AdminId", (object?)adminId ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@Username", username ?? "System");
+                cmd.Parameters.AddWithValue("@Action", action);
+                cmd.Parameters.AddWithValue("@Target", target);
+                cmd.Parameters.AddWithValue("@Details", details);
+                cmd.Parameters.AddWithValue("@Timestamp", DateTime.Now.ToString("o"));
+                cmd.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[LogActivity] Error: {ex.Message}");
+            }
+        }
+
+        public List<ActivityLog> GetActivityLogs()
+        {
+            var logs = new List<ActivityLog>();
+            try
+            {
+                using var conn = GetConnection();
+                var sql = "SELECT * FROM ActivityLogs ORDER BY Timestamp DESC LIMIT 500";
+                using var cmd = new SqliteCommand(sql, conn);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    logs.Add(new ActivityLog
+                    {
+                        Id = reader.GetInt32(0),
+                        AdminId = reader.IsDBNull(1) ? null : reader.GetInt32(1),
+                        AdminUsername = reader.IsDBNull(2) ? "" : reader.GetString(2),
+                        Action = reader.GetString(3),
+                        Target = reader.GetString(4),
+                        Details = reader.IsDBNull(5) ? "" : reader.GetString(5),
+                        Timestamp = DateTime.Parse(reader.GetString(6))
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[GetActivityLogs] Error: {ex.Message}");
+            }
+            return logs;
+        }
+
         // Student Operations
         public int AddStudent(Student student)
         {
             using var conn = GetConnection();
-            var sql = @"INSERT INTO Students (StudentId, Name, Email, Program, YearLevel, Section, EnrolledDate, IsActive)
-                       VALUES (@StudentId, @Name, @Email, @Program, @YearLevel, @Section, @EnrolledDate, @IsActive);
+            var sql = @"INSERT INTO Students (StudentId, Name, Email, Program, YearLevel, Section, EnrolledDate, IsActive, IsVerified)
+                       VALUES (@StudentId, @Name, @Email, @Program, @YearLevel, @Section, @EnrolledDate, @IsActive, @IsVerified);
                        SELECT last_insert_rowid();";
             
             using var cmd = new SqliteCommand(sql, conn);
@@ -133,6 +236,7 @@ namespace AttendanceWeb.Services
             cmd.Parameters.AddWithValue("@Section", student.Section ?? "");
             cmd.Parameters.AddWithValue("@EnrolledDate", student.EnrolledDate.ToString("o"));
             cmd.Parameters.AddWithValue("@IsActive", student.IsActive ? 1 : 0);
+            cmd.Parameters.AddWithValue("@IsVerified", student.IsVerified ? 1 : 0);
             
             return Convert.ToInt32(cmd.ExecuteScalar());
         }
@@ -158,9 +262,8 @@ namespace AttendanceWeb.Services
                     YearLevel = reader.IsDBNull(5) ? 0 : reader.GetInt32(5),
                     EnrolledDate = DateTime.Parse(reader.GetString(6)),
                     IsActive = reader.GetInt32(7) == 1,
-                    // Handle Section if column exists (it might not in old queries without strict select)
-                    // But we used SELECT *, so check field count
-                    Section = reader.FieldCount > 8 && !reader.IsDBNull(8) ? reader.GetString(8) : ""
+                    Section = reader.FieldCount > 8 && !reader.IsDBNull(8) ? reader.GetString(8) : "",
+                    IsVerified = reader.FieldCount > 9 && !reader.IsDBNull(9) ? reader.GetInt32(9) == 1 : false
                 };
             }
             return null;
@@ -187,7 +290,8 @@ namespace AttendanceWeb.Services
                     YearLevel = reader.IsDBNull(5) ? 0 : reader.GetInt32(5),
                     EnrolledDate = DateTime.Parse(reader.GetString(6)),
                     IsActive = reader.GetInt32(7) == 1,
-                    Section = reader.FieldCount > 8 && !reader.IsDBNull(8) ? reader.GetString(8) : ""
+                    Section = reader.FieldCount > 8 && !reader.IsDBNull(8) ? reader.GetString(8) : "",
+                    IsVerified = reader.FieldCount > 9 && !reader.IsDBNull(9) ? reader.GetInt32(9) == 1 : false
                 };
             }
             return null;
@@ -214,7 +318,8 @@ namespace AttendanceWeb.Services
                     YearLevel = reader.IsDBNull(5) ? 0 : reader.GetInt32(5),
                     EnrolledDate = DateTime.Parse(reader.GetString(6)),
                     IsActive = reader.GetInt32(7) == 1,
-                    Section = reader.FieldCount > 8 && !reader.IsDBNull(8) ? reader.GetString(8) : ""
+                    Section = reader.FieldCount > 8 && !reader.IsDBNull(8) ? reader.GetString(8) : "",
+                    IsVerified = reader.FieldCount > 9 && !reader.IsDBNull(9) ? reader.GetInt32(9) == 1 : false
                 });
             }
             return students;
@@ -225,7 +330,8 @@ namespace AttendanceWeb.Services
             using var conn = GetConnection();
             var sql = @"UPDATE Students 
                        SET StudentId = @studentId, Name = @name, Email = @email, 
-                           Program = @program, YearLevel = @yearLevel, IsActive = @isActive
+                           Program = @program, YearLevel = @yearLevel, IsActive = @isActive, 
+                           IsVerified = @isVerified, Section = @section
                        WHERE Id = @id";
             
             using var cmd = new SqliteCommand(sql, conn);
@@ -236,6 +342,8 @@ namespace AttendanceWeb.Services
             cmd.Parameters.AddWithValue("@program", student.Program ?? "");
             cmd.Parameters.AddWithValue("@yearLevel", student.YearLevel);
             cmd.Parameters.AddWithValue("@isActive", student.IsActive ? 1 : 0);
+            cmd.Parameters.AddWithValue("@isVerified", student.IsVerified ? 1 : 0);
+            cmd.Parameters.AddWithValue("@section", student.Section ?? "");
             cmd.ExecuteNonQuery();
         }
 
@@ -415,7 +523,7 @@ namespace AttendanceWeb.Services
                            AcademicYear = @academicYear, IsActive = @isActive,
                            TimeInStart = @TimeInStart, TimeInEnd = @TimeInEnd,
                            TimeOutStart = @TimeOutStart, TimeOutEnd = @TimeOutEnd,
-                           IsDeleted = @IsDeleted
+                           IsDeleted = @IsDeleted, Semester = @Semester
                        WHERE Id = @id";
             
             using var cmd = new SqliteCommand(sql, conn);
@@ -431,6 +539,7 @@ namespace AttendanceWeb.Services
             cmd.Parameters.AddWithValue("@TimeOutStart", evt.TimeOutStart ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@TimeOutEnd", evt.TimeOutEnd ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@IsDeleted", evt.IsDeleted ? 1 : 0);
+            cmd.Parameters.AddWithValue("@Semester", evt.Semester ?? "First");
             cmd.ExecuteNonQuery();
         }
 
@@ -461,7 +570,8 @@ namespace AttendanceWeb.Services
                 TimeInEnd = reader.FieldCount > 8 && !reader.IsDBNull(8) ? ParseTime(reader.GetString(8)) : null,
                 TimeOutStart = reader.FieldCount > 9 && !reader.IsDBNull(9) ? ParseTime(reader.GetString(9)) : null,
                 TimeOutEnd = reader.FieldCount > 10 && !reader.IsDBNull(10) ? ParseTime(reader.GetString(10)) : null,
-                IsDeleted = reader.FieldCount > 11 && !reader.IsDBNull(11) && reader.GetInt32(11) == 1
+                IsDeleted = reader.FieldCount > 11 && !reader.IsDBNull(11) && reader.GetInt32(11) == 1,
+                Semester = reader.FieldCount > 12 && !reader.IsDBNull(12) ? reader.GetString(12) : "First"
             };
         }
         public (bool Success, string Message) RecordTimeIn(int studentId, int eventId)
@@ -604,6 +714,17 @@ namespace AttendanceWeb.Services
                 int rows = updateCmd.ExecuteNonQuery();
                 Console.WriteLine($"[RecordTimeOut] Update affected {rows} rows.");
 
+                if (rows > 0)
+                {
+                    // Ensure the record is NOT marked as deleted
+                    var undeleteSql = "UPDATE AttendanceRecords SET IsDeleted = 0 WHERE StudentId = @StudentId AND EventId = @EventId AND RecordDate = @RecordDate";
+                    using var undeleteCmd = new SqliteCommand(undeleteSql, conn);
+                    undeleteCmd.Parameters.AddWithValue("@StudentId", studentId);
+                    undeleteCmd.Parameters.AddWithValue("@EventId", eventId);
+                    undeleteCmd.Parameters.AddWithValue("@RecordDate", now.ToString("yyyy-MM-dd"));
+                    undeleteCmd.ExecuteNonQuery();
+                }
+
                 if (rows == 0)
                 {
                     // No record exists (Student didn't Time In), so INSERT new record
@@ -679,7 +800,8 @@ namespace AttendanceWeb.Services
                                     JOIN Events e ON ar.EventId = e.Id
                                     WHERE ar.StudentId = @StudentId 
                                     AND (ar.TimeIn IS NOT NULL OR ar.Status IN ('Present', 'Late'))
-                                    AND e.EventDate >= @EnrolledDate";
+                                    AND e.EventDate >= @EnrolledDate
+                                    AND ar.IsDeleted = 0";
             
             using var cmdPresent = new SqliteCommand(countPresentSql, conn);
             cmdPresent.Parameters.AddWithValue("@StudentId", studentId);
@@ -720,6 +842,7 @@ namespace AttendanceWeb.Services
                        JOIN Events e ON a.EventId = e.Id
                        WHERE a.StudentId = @StudentId
                        AND e.EventDate >= @EnrolledDate
+                       AND a.IsDeleted = 0
                        ORDER BY e.EventDate DESC";
             
             using var cmd = new SqliteCommand(sql, conn);
@@ -789,10 +912,10 @@ namespace AttendanceWeb.Services
             using var conn = GetConnection();
             var sql = @"INSERT INTO Events 
                         (EventName, Description, EventDate, Period, AcademicYear, IsActive, 
-                         TimeInStart, TimeInEnd, TimeOutStart, TimeOutEnd, IsDeleted)
+                         TimeInStart, TimeInEnd, TimeOutStart, TimeOutEnd, IsDeleted, Semester)
                         VALUES 
                         (@Name, @Desc, @Date, @Period, @Year, @Active, 
-                         @TIS, @TIE, @TOS, @TOE, 0)";
+                         @TIS, @TIE, @TOS, @TOE, 0, @Semester)";
             
             using var cmd = new SqliteCommand(sql, conn);
             cmd.Parameters.AddWithValue("@Name", evt.EventName);
@@ -805,6 +928,7 @@ namespace AttendanceWeb.Services
             cmd.Parameters.AddWithValue("@TIE", evt.TimeInEnd?.ToString("HH:mm") ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@TOS", evt.TimeOutStart?.ToString("HH:mm") ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@TOE", evt.TimeOutEnd?.ToString("HH:mm") ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@Semester", evt.Semester ?? "First");
             
             cmd.ExecuteNonQuery();
         }
@@ -820,7 +944,7 @@ namespace AttendanceWeb.Services
                        FROM AttendanceRecords a
                        JOIN Students s ON a.StudentId = s.Id
                        JOIN Events e ON a.EventId = e.Id
-                       WHERE a.EventId = @EventId
+                       WHERE a.EventId = @EventId AND a.IsDeleted = 0
                        ORDER BY a.TimeIn";
             
             using var cmd = new SqliteCommand(sql, conn);
@@ -874,6 +998,7 @@ namespace AttendanceWeb.Services
                        FROM AttendanceRecords a
                        JOIN Students s ON a.StudentId = s.Id
                        JOIN Events e ON a.EventId = e.Id
+                       WHERE a.IsDeleted = 0
                        ORDER BY a.RecordDate DESC";
 
             using var cmd = new SqliteCommand(sql, conn);
@@ -921,7 +1046,7 @@ namespace AttendanceWeb.Services
             try 
             {
                 using var conn = GetConnection();
-                var sql = "SELECT * FROM AttendanceRecords ORDER BY RecordDate DESC";
+                var sql = "SELECT * FROM AttendanceRecords WHERE IsDeleted = 0 ORDER BY RecordDate DESC";
                 
                 using var cmd = new SqliteCommand(sql, conn);
                 using var reader = cmd.ExecuteReader();
@@ -952,8 +1077,8 @@ namespace AttendanceWeb.Services
         public void AddAdmin(Admin admin)
         {
             using var conn = GetConnection();
-            var sql = @"INSERT INTO Admins (Username, Password, Name, TemplateData, CreatedDate)
-                       VALUES (@Username, @Password, @Name, @TemplateData, @CreatedDate)";
+            var sql = @"INSERT INTO Admins (Username, Password, Name, TemplateData, CreatedDate, SecurityQuestion, SecurityAnswer)
+                       VALUES (@Username, @Password, @Name, @TemplateData, @CreatedDate, @SecurityQuestion, @SecurityAnswer)";
             
             using var cmd = new SqliteCommand(sql, conn);
             cmd.Parameters.AddWithValue("@Username", admin.Username);
@@ -961,6 +1086,8 @@ namespace AttendanceWeb.Services
             cmd.Parameters.AddWithValue("@Name", admin.Name);
             cmd.Parameters.AddWithValue("@TemplateData", admin.TemplateData);
             cmd.Parameters.AddWithValue("@CreatedDate", admin.CreatedDate.ToString("o"));
+            cmd.Parameters.AddWithValue("@SecurityQuestion", admin.SecurityQuestion ?? "");
+            cmd.Parameters.AddWithValue("@SecurityAnswer", admin.SecurityAnswer ?? "");
             
             cmd.ExecuteNonQuery();
         }
@@ -969,7 +1096,8 @@ namespace AttendanceWeb.Services
         {
             using var conn = GetConnection();
             var sql = @"UPDATE Admins 
-                       SET Username = @Username, Password = @Password, Name = @Name, TemplateData = @TemplateData
+                       SET Username = @Username, Password = @Password, Name = @Name, TemplateData = @TemplateData,
+                           SecurityQuestion = @SecurityQuestion, SecurityAnswer = @SecurityAnswer
                        WHERE Id = @Id";
             
             using var cmd = new SqliteCommand(sql, conn);
@@ -978,6 +1106,8 @@ namespace AttendanceWeb.Services
             cmd.Parameters.AddWithValue("@Password", admin.Password);
             cmd.Parameters.AddWithValue("@Name", admin.Name);
             cmd.Parameters.AddWithValue("@TemplateData", admin.TemplateData);
+            cmd.Parameters.AddWithValue("@SecurityQuestion", admin.SecurityQuestion ?? "");
+            cmd.Parameters.AddWithValue("@SecurityAnswer", admin.SecurityAnswer ?? "");
             
             cmd.ExecuteNonQuery();
         }
@@ -991,6 +1121,170 @@ namespace AttendanceWeb.Services
             cmd.Parameters.AddWithValue("@Id", adminId);
             
             cmd.ExecuteNonQuery();
+        }
+
+        public (bool Success, string Message) AddAdminSecure(Admin admin, int currentAdminId, string currentAdminUsername)
+        {
+            var existingAdmins = GetAllAdmins();
+            if (existingAdmins.Count >= 5)
+                return (false, "Maximum limit of 5 admins reached.");
+
+            if (existingAdmins.Any(a => a.Username.Equals(admin.Username, StringComparison.OrdinalIgnoreCase)))
+                return (false, "Username already exists.");
+
+            AddAdmin(admin);
+            LogActivity(currentAdminId, currentAdminUsername, "Create", "Admin", $"Created admin: {admin.Username}");
+            return (true, "Admin added successfully.");
+        }
+
+        public (bool Success, string Message) DeleteAdminSecure(int adminIdToDelete, int currentAdminId, string currentAdminUsername)
+        {
+            if (adminIdToDelete != currentAdminId)
+            {
+                return (false, "You can only delete your own admin account.");
+            }
+
+            var targetAdmin = GetAdminById(adminIdToDelete);
+            if (targetAdmin == null)
+            {
+                return (false, "Admin account not found.");
+            }
+
+            DeleteAdmin(adminIdToDelete);
+            LogActivity(currentAdminId, currentAdminUsername, "Delete", "Admin", $"Deleted own admin account: {targetAdmin.Username}");
+            return (true, "Admin account deleted successfully.");
+        }
+
+        public void UpdateLastLogin(int adminId)
+        {
+            using var conn = GetConnection();
+            var sql = "UPDATE Admins SET LastLogin = @LastLogin WHERE Id = @Id";
+            using var cmd = new SqliteCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Id", adminId);
+            cmd.Parameters.AddWithValue("@LastLogin", DateTime.Now.ToString("o"));
+            cmd.ExecuteNonQuery();
+        }
+
+        public void SoftDeleteRecord(int recordId, int adminId, string username)
+        {
+            using var conn = GetConnection();
+            var sql = "UPDATE AttendanceRecords SET IsDeleted = 1 WHERE Id = @Id";
+            using var cmd = new SqliteCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Id", recordId);
+            cmd.ExecuteNonQuery();
+            LogActivity(adminId, username, "Delete", "Record", $"Soft deleted record ID: {recordId}");
+        }
+
+        public void ResetDatabase(int adminId, string username)
+        {
+            using var conn = GetConnection();
+            using var transaction = conn.BeginTransaction();
+            try
+            {
+                new SqliteCommand("DELETE FROM AttendanceRecords", conn, transaction).ExecuteNonQuery();
+                new SqliteCommand("DELETE FROM FingerprintTemplates", conn, transaction).ExecuteNonQuery();
+                new SqliteCommand("DELETE FROM Events", conn, transaction).ExecuteNonQuery();
+                new SqliteCommand("DELETE FROM Students", conn, transaction).ExecuteNonQuery();
+                
+                transaction.Commit();
+                LogActivity(adminId, username, "Reset", "Database", "Cleared all records for new school year.");
+            }
+            catch
+            {
+                transaction.Rollback();
+                throw;
+            }
+        }
+
+        public class DatabaseBackup
+        {
+            public List<Student>? Students { get; set; }
+            public List<Event>? Events { get; set; }
+            public List<AttendanceRecord>? Attendance { get; set; }
+            public List<ActivityLog>? Logs { get; set; }
+        }
+
+        public void ImportDatabaseFromJson(string json, int adminId, string username)
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<DatabaseBackup>(json);
+            if (data == null) return;
+
+            using var conn = GetConnection();
+            using var transaction = conn.BeginTransaction();
+            try
+            {
+                // Clear existing data (optional, but requested for "Import" usually implies restore)
+                new SqliteCommand("DELETE FROM AttendanceRecords", conn, transaction).ExecuteNonQuery();
+                new SqliteCommand("DELETE FROM Events", conn, transaction).ExecuteNonQuery();
+                new SqliteCommand("DELETE FROM Students", conn, transaction).ExecuteNonQuery();
+
+                if (data.Students != null)
+                {
+                    foreach (var s in data.Students)
+                    {
+                        var cmd = new SqliteCommand(@"INSERT INTO Students (StudentId, Name, Email, Program, YearLevel, EnrolledDate, IsActive, Section, IsVerified) 
+                                                     VALUES (@StudentId, @Name, @Email, @Program, @YearLevel, @EnrolledDate, @IsActive, @Section, @Verified)", conn, transaction);
+                        cmd.Parameters.AddWithValue("@StudentId", s.StudentId);
+                        cmd.Parameters.AddWithValue("@Name", s.Name);
+                        cmd.Parameters.AddWithValue("@Email", s.Email ?? "");
+                        cmd.Parameters.AddWithValue("@Program", s.Program ?? "");
+                        cmd.Parameters.AddWithValue("@YearLevel", s.YearLevel);
+                        cmd.Parameters.AddWithValue("@EnrolledDate", s.EnrolledDate.ToString("yyyy-MM-dd"));
+                        cmd.Parameters.AddWithValue("@IsActive", s.IsActive ? 1 : 0);
+                        cmd.Parameters.AddWithValue("@Section", s.Section ?? "");
+                        cmd.Parameters.AddWithValue("@Verified", s.IsVerified ? 1 : 0);
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+
+                if (data.Events != null)
+                {
+                    foreach (var e in data.Events)
+                    {
+                        var cmd = new SqliteCommand(@"INSERT INTO Events (EventName, Description, EventDate, Period, AcademicYear, IsActive, TimeInStart, TimeInEnd, TimeOutStart, TimeOutEnd, IsDeleted, Semester)
+                                                     VALUES (@Name, @Desc, @Date, @Period, @Year, @Active, @TIS, @TIE, @TOS, @TOE, @Deleted, @Semester)", conn, transaction);
+                        cmd.Parameters.AddWithValue("@Name", e.EventName);
+                        cmd.Parameters.AddWithValue("@Desc", e.Description ?? "");
+                        cmd.Parameters.AddWithValue("@Date", e.EventDate.ToString("yyyy-MM-dd"));
+                        cmd.Parameters.AddWithValue("@Period", e.Period);
+                        cmd.Parameters.AddWithValue("@Year", e.AcademicYear);
+                        cmd.Parameters.AddWithValue("@Active", e.IsActive ? 1 : 0);
+                        cmd.Parameters.AddWithValue("@TIS", e.TimeInStart?.ToString("HH:mm") ?? (object)DBNull.Value);
+                        cmd.Parameters.AddWithValue("@TIE", e.TimeInEnd?.ToString("HH:mm") ?? (object)DBNull.Value);
+                        cmd.Parameters.AddWithValue("@TOS", e.TimeOutStart?.ToString("HH:mm") ?? (object)DBNull.Value);
+                        cmd.Parameters.AddWithValue("@TOE", e.TimeOutEnd?.ToString("HH:mm") ?? (object)DBNull.Value);
+                        cmd.Parameters.AddWithValue("@Deleted", e.IsDeleted ? 1 : 0);
+                        cmd.Parameters.AddWithValue("@Semester", e.Semester ?? "First");
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+
+                if (data.Attendance != null)
+                {
+                    foreach (var a in data.Attendance)
+                    {
+                        var cmd = new SqliteCommand(@"INSERT INTO AttendanceRecords (StudentId, EventId, TimeIn, TimeOut, Status, RecordDate, IsDeleted)
+                                                     VALUES (@Sid, @Eid, @Tin, @Tout, @Status, @Rdate, @Deleted)", conn, transaction);
+                        cmd.Parameters.AddWithValue("@Sid", a.StudentId);
+                        cmd.Parameters.AddWithValue("@Eid", a.EventId);
+                        cmd.Parameters.AddWithValue("@Tin", a.TimeIn?.ToString("o") ?? (object)DBNull.Value);
+                        cmd.Parameters.AddWithValue("@Tout", a.TimeOut?.ToString("o") ?? (object)DBNull.Value);
+                        cmd.Parameters.AddWithValue("@Status", a.Status ?? "");
+                        cmd.Parameters.AddWithValue("@Rdate", a.RecordDate.ToString("o"));
+                        cmd.Parameters.AddWithValue("@Deleted", a.IsDeleted ? 1 : 0);
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+
+                transaction.Commit();
+                LogActivity(adminId, username, "Import", "Database", "Imported database from JSON backup.");
+            }
+            catch (Exception ex)
+            {
+                transaction.Rollback();
+                Console.WriteLine("Import failed: " + ex.Message);
+                throw;
+            }
         }
 
         public Admin? GetAdminById(int id)
@@ -1010,7 +1304,8 @@ namespace AttendanceWeb.Services
                     Id = Convert.ToInt32(reader["Id"]),
                     Username = reader["Username"].ToString() ?? "",
                     Name = reader["Name"] != DBNull.Value ? reader["Name"].ToString() ?? "" : "",
-                    TemplateData = reader["TemplateData"] != DBNull.Value ? reader["TemplateData"].ToString() ?? "" : ""
+                    TemplateData = reader["TemplateData"] != DBNull.Value ? reader["TemplateData"].ToString() ?? "" : "",
+                    LastLogin = reader["LastLogin"] != DBNull.Value ? DateTime.Parse(reader["LastLogin"].ToString()!) : (DateTime?)null
                 };
                 
                 var createdStr = reader["CreatedDate"] != DBNull.Value ? reader["CreatedDate"].ToString() : null;
@@ -1023,6 +1318,15 @@ namespace AttendanceWeb.Services
                     {
                         admin.Password = reader.GetString(pwdIdx);
                     }
+                }
+                catch { }
+
+                try
+                {
+                    var sqIdx = reader.GetOrdinal("SecurityQuestion");
+                    if (!reader.IsDBNull(sqIdx)) admin.SecurityQuestion = reader.GetString(sqIdx);
+                    var saIdx = reader.GetOrdinal("SecurityAnswer");
+                    if (!reader.IsDBNull(saIdx)) admin.SecurityAnswer = reader.GetString(saIdx);
                 }
                 catch { }
                 
@@ -1068,6 +1372,15 @@ namespace AttendanceWeb.Services
                     }
                 }
                 catch { /* Ignore if column missing */ }
+
+                try
+                {
+                    var sqIdx = reader.GetOrdinal("SecurityQuestion");
+                    if (!reader.IsDBNull(sqIdx)) admin.SecurityQuestion = reader.GetString(sqIdx);
+                    var saIdx = reader.GetOrdinal("SecurityAnswer");
+                    if (!reader.IsDBNull(saIdx)) admin.SecurityAnswer = reader.GetString(saIdx);
+                }
+                catch { }
 
                 admins.Add(admin);
             }
@@ -1164,5 +1477,143 @@ namespace AttendanceWeb.Services
 
 
         // Removed duplicate GetStudentAttendanceHistory
+
+        // ===== Sanction Rules Operations =====
+
+        public List<SanctionRule> GetSanctionRules()
+        {
+            var rules = new List<SanctionRule>();
+            using var conn = GetConnection();
+            var sql = "SELECT Id, Semester, AbsenceCount, SanctionDescription, IsOrMore FROM SanctionRules ORDER BY Semester, AbsenceCount";
+            using var cmd = new SqliteCommand(sql, conn);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                rules.Add(new SanctionRule
+                {
+                    Id = reader.GetInt32(0),
+                    Semester = reader.GetString(1),
+                    AbsenceCount = reader.GetInt32(2),
+                    SanctionDescription = reader.GetString(3),
+                    IsOrMore = reader.GetInt32(4) == 1
+                });
+            }
+            return rules;
+        }
+
+        public void AddSanctionRule(SanctionRule rule)
+        {
+            using var conn = GetConnection();
+            var sql = "INSERT INTO SanctionRules (Semester, AbsenceCount, SanctionDescription, IsOrMore) VALUES (@Semester, @Count, @Desc, @IsOrMore)";
+            using var cmd = new SqliteCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Semester", rule.Semester);
+            cmd.Parameters.AddWithValue("@Count", rule.AbsenceCount);
+            cmd.Parameters.AddWithValue("@Desc", rule.SanctionDescription);
+            cmd.Parameters.AddWithValue("@IsOrMore", rule.IsOrMore ? 1 : 0);
+            cmd.ExecuteNonQuery();
+        }
+
+        public void UpdateSanctionRule(SanctionRule rule)
+        {
+            using var conn = GetConnection();
+            var sql = "UPDATE SanctionRules SET Semester = @Semester, AbsenceCount = @Count, SanctionDescription = @Desc, IsOrMore = @IsOrMore WHERE Id = @Id";
+            using var cmd = new SqliteCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Id", rule.Id);
+            cmd.Parameters.AddWithValue("@Semester", rule.Semester);
+            cmd.Parameters.AddWithValue("@Count", rule.AbsenceCount);
+            cmd.Parameters.AddWithValue("@Desc", rule.SanctionDescription);
+            cmd.Parameters.AddWithValue("@IsOrMore", rule.IsOrMore ? 1 : 0);
+            cmd.ExecuteNonQuery();
+        }
+
+        public void DeleteSanctionRule(int ruleId)
+        {
+            using var conn = GetConnection();
+            var sql = "DELETE FROM SanctionRules WHERE Id = @Id";
+            using var cmd = new SqliteCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Id", ruleId);
+            cmd.ExecuteNonQuery();
+        }
+
+        public List<StudentSanctionInfo> GetStudentSanctions(int studentId)
+        {
+            var sanctions = new List<StudentSanctionInfo>();
+            using var conn = GetConnection();
+
+            // Get student's enrollment date
+            var enrollDateSql = "SELECT EnrolledDate FROM Students WHERE Id = @StudentId";
+            using var enrollCmd = new SqliteCommand(enrollDateSql, conn);
+            enrollCmd.Parameters.AddWithValue("@StudentId", studentId);
+            var enrollDateStr = enrollCmd.ExecuteScalar()?.ToString();
+            var enrolledDate = !string.IsNullOrEmpty(enrollDateStr) ? DateTime.Parse(enrollDateStr) : DateTime.MinValue;
+
+            // Get distinct Semester + AcademicYear combos
+            var comboSql = @"SELECT DISTINCT e.Semester, e.AcademicYear 
+                             FROM Events e 
+                             WHERE e.IsDeleted = 0 
+                             AND e.EventDate >= @EnrolledDate
+                             AND e.Semester IS NOT NULL AND e.Semester != ''
+                             ORDER BY e.AcademicYear, e.Semester";
+            using var comboCmd = new SqliteCommand(comboSql, conn);
+            comboCmd.Parameters.AddWithValue("@EnrolledDate", enrolledDate.ToString("yyyy-MM-dd"));
+            
+            var combos = new List<(string Semester, string AcademicYear)>();
+            using (var reader = comboCmd.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    combos.Add((reader.GetString(0), reader.GetString(1)));
+                }
+            }
+
+            // Get sanction rules
+            var rules = GetSanctionRules();
+
+            foreach (var combo in combos)
+            {
+                // Count total events for this semester+year
+                var totalSql = @"SELECT COUNT(*) FROM Events 
+                                WHERE IsDeleted = 0 AND Semester = @Sem AND AcademicYear = @Year 
+                                AND EventDate < date('now') AND EventDate >= @EnrolledDate";
+                using var totalCmd = new SqliteCommand(totalSql, conn);
+                totalCmd.Parameters.AddWithValue("@Sem", combo.Semester);
+                totalCmd.Parameters.AddWithValue("@Year", combo.AcademicYear);
+                totalCmd.Parameters.AddWithValue("@EnrolledDate", enrolledDate.ToString("yyyy-MM-dd"));
+                int totalEvents = Convert.ToInt32(totalCmd.ExecuteScalar());
+
+                // Count present for this semester+year
+                var presentSql = @"SELECT COUNT(*) FROM AttendanceRecords ar
+                                  JOIN Events e ON ar.EventId = e.Id
+                                  WHERE ar.StudentId = @StudentId 
+                                  AND e.Semester = @Sem AND e.AcademicYear = @Year
+                                  AND (ar.TimeIn IS NOT NULL OR ar.Status IN ('Present', 'Late'))
+                                  AND e.EventDate >= @EnrolledDate
+                                  AND ar.IsDeleted = 0";
+                using var presentCmd = new SqliteCommand(presentSql, conn);
+                presentCmd.Parameters.AddWithValue("@StudentId", studentId);
+                presentCmd.Parameters.AddWithValue("@Sem", combo.Semester);
+                presentCmd.Parameters.AddWithValue("@Year", combo.AcademicYear);
+                presentCmd.Parameters.AddWithValue("@EnrolledDate", enrolledDate.ToString("yyyy-MM-dd"));
+                int present = Convert.ToInt32(presentCmd.ExecuteScalar());
+
+                int absences = Math.Max(0, totalEvents - present);
+                // Removed absences == 0 skip to allow "0 absence" sanctions/rewards per audit requirements.
+
+                // Find matching sanction rule
+                var semesterRules = rules.Where(r => r.Semester == combo.Semester).ToList();
+                var matchedRule = semesterRules.FirstOrDefault(r => !r.IsOrMore && r.AbsenceCount == absences)
+                               ?? semesterRules.FirstOrDefault(r => r.IsOrMore && absences >= r.AbsenceCount);
+
+                sanctions.Add(new StudentSanctionInfo
+                {
+                    Semester = combo.Semester,
+                    AcademicYear = combo.AcademicYear,
+                    AbsenceCount = absences,
+                    SanctionDescription = matchedRule?.SanctionDescription ?? "No sanction rule defined"
+                });
+            }
+
+            return sanctions;
+        }
     }
 }

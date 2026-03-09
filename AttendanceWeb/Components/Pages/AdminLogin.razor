@@ -43,7 +43,71 @@
         <button class="btn btn-primary btn-block" @onclick="LoginWithPassword" disabled="@isLoading">
             @(isLoading ? "Logging in..." : "Login")
         </button>
+
+        <div style="text-align: center; margin-top: 1rem;">
+            <button class="btn-link" @onclick="ShowForgotPassword" style="background: none; border: none; color: #667eea; cursor: pointer; font-size: 0.9rem; text-decoration: underline;">
+                Forgot Password?
+            </button>
+        </div>
     </div>
+
+    @if (showForgotPassword)
+    {
+        <div class="login-card" style="margin-top: 1rem;">
+            <div class="login-header">
+                <h2 style="font-size: 1.3rem;">🔑 Reset Password</h2>
+                <p style="font-size: 0.85rem;">Answer your security question to reset your password</p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(resetMessage))
+            {
+                <div class="alert @(resetSuccess ? "alert-success" : "alert-error")">@(resetSuccess ? "✅" : "⚠️") @resetMessage</div>
+            }
+
+            @if (resetStep == 1)
+            {
+                <div class="form-group">
+                    <label>Username (from login form)</label>
+                    <input class="form-control" @bind="username" placeholder="Enter username" />
+                </div>
+                <button class="btn btn-primary btn-block" @onclick="FindAdminForReset">Next</button>
+            }
+            else if (resetStep == 2)
+            {
+                <div class="form-group">
+                    <label>Security Question</label>
+                    <p style="font-weight: 600; color: #2d3748; padding: 0.5rem; background: #f7fafc; border-radius: 8px;">@resetSecurityQuestion</p>
+                </div>
+                <div class="form-group">
+                    <label>Your Answer</label>
+                    <input class="form-control" @bind="resetSecurityAnswer" placeholder="Enter your answer" />
+                </div>
+                <button class="btn btn-primary btn-block" @onclick="VerifySecurityAnswer">Verify</button>
+            }
+            else if (resetStep == 3)
+            {
+                <div class="form-group">
+                    <label>New Password</label>
+                    <div class="password-wrapper">
+                        <input type="@(showResetPw ? "text" : "password")" class="form-control" @bind="resetNewPassword" placeholder="Enter new password" />
+                        <button type="button" class="btn-toggle-pw" @onclick="() => showResetPw = !showResetPw" tabindex="-1">@(showResetPw ? "🙈" : "👁️")</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Confirm New Password</label>
+                    <div class="password-wrapper">
+                        <input type="@(showResetConfirmPw ? "text" : "password")" class="form-control" @bind="resetConfirmPassword" placeholder="Confirm new password" />
+                        <button type="button" class="btn-toggle-pw" @onclick="() => showResetConfirmPw = !showResetConfirmPw" tabindex="-1">@(showResetConfirmPw ? "🙈" : "👁️")</button>
+                    </div>
+                </div>
+                <button class="btn btn-primary btn-block" @onclick="ResetPasswordConfirm">Reset Password</button>
+            }
+
+            <button class="btn-link" @onclick="CancelForgotPassword" style="display: block; margin: 1rem auto 0; background: none; border: none; color: #718096; cursor: pointer; font-size: 0.85rem;">
+                ← Back to Login
+            </button>
+        </div>
+    }
 </div>
 
 <style>
@@ -171,6 +235,12 @@
     .btn-toggle-pw:hover {
         opacity: 1;
     }
+
+    .alert-success {
+        background-color: #f0fff4;
+        color: #276749;
+        border: 1px solid #9ae6b4;
+    }
 </style>
 
 @code {
@@ -180,6 +250,20 @@
     private bool isLoading = false;
     private bool isFullscreen = false;
     private bool showLoginPassword = false;
+
+    // Forgot password state
+    private bool showForgotPassword = false;
+    private int resetStep = 1;
+    private string resetUsername = "";
+    private string resetSecurityQuestion = "";
+    private string resetSecurityAnswer = "";
+    private string resetNewPassword = "";
+    private string resetConfirmPassword = "";
+    private string resetMessage = "";
+    private bool resetSuccess = false;
+    private bool showResetPw = false;
+    private bool showResetConfirmPw = false;
+    private int resetAdminId = 0;
 
     private async Task HandleKeyPress(KeyboardEventArgs e)
     {
@@ -203,6 +287,8 @@
             {
                 if (admin.Password == password)
                 {
+                    Database.UpdateLastLogin(admin.Id);
+                    Database.LogActivity(admin.Id, admin.Username, "Login", "Admin", "Password login successful.");
                     AuthService.Login(admin.Username, admin.Id);
                     
                     // Persist session via localStorage
@@ -221,6 +307,7 @@
                 // Fallback for initial setup if empty or default admin
                 if (admins.Count == 0 && username == "admin" && password == "admin")
                 {
+                    Database.LogActivity(0, "admin", "Login", "Admin", "Default admin login successful.");
                     AuthService.Login("admin", 0);
                     await JSRuntime.InvokeVoidAsync("localStorage.setItem", "adminUser", "admin");
                     await JSRuntime.InvokeVoidAsync("localStorage.setItem", "adminId", "0");
@@ -255,6 +342,135 @@
                 AuthService.Login(savedUser, adminId);
                 Navigation.NavigateTo("/admin/dashboard");
             }
+        }
+    }
+
+    private void ShowForgotPassword()
+    {
+        showForgotPassword = true;
+        resetStep = 1;
+        resetUsername = "";
+        resetMessage = "";
+        resetSuccess = false;
+        errorMessage = "";
+    }
+
+    private void CancelForgotPassword()
+    {
+        showForgotPassword = false;
+        resetStep = 1;
+        resetUsername = "";
+        resetSecurityQuestion = "";
+        resetSecurityAnswer = "";
+        resetNewPassword = "";
+        resetConfirmPassword = "";
+        resetMessage = "";
+        resetSuccess = false;
+        resetAdminId = 0;
+    }
+
+    private async Task FindAdminForReset()
+    {
+        resetMessage = "";
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            resetMessage = "Enter your username in the login form first.";
+            return;
+        }
+
+        resetUsername = username.Trim();
+
+        var admins = await Database.GetAllAdminsAsync();
+        var admin = admins.FirstOrDefault(a => a.Username.Equals(resetUsername, StringComparison.OrdinalIgnoreCase));
+
+        if (admin == null)
+        {
+            resetMessage = "Username not found.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(admin.SecurityQuestion) || string.IsNullOrWhiteSpace(admin.SecurityAnswer))
+        {
+            resetMessage = "No security question set for this account. Contact another admin to reset your password.";
+            return;
+        }
+
+        resetAdminId = admin.Id;
+        resetSecurityQuestion = admin.SecurityQuestion;
+        resetStep = 2;
+    }
+
+    private async Task VerifySecurityAnswer()
+    {
+        resetMessage = "";
+        if (string.IsNullOrWhiteSpace(resetSecurityAnswer))
+        {
+            resetMessage = "Please enter your answer.";
+            return;
+        }
+
+        var admin = await Task.Run(() => Database.GetAdminById(resetAdminId));
+        if (admin == null)
+        {
+            resetMessage = "Admin not found.";
+            return;
+        }
+
+        if (!admin.SecurityAnswer.Equals(resetSecurityAnswer, StringComparison.OrdinalIgnoreCase))
+        {
+            resetMessage = "Incorrect answer. Please try again.";
+            return;
+        }
+
+        resetStep = 3;
+        resetMessage = "";
+    }
+
+    private async Task ResetPasswordConfirm()
+    {
+        resetMessage = "";
+        resetSuccess = false;
+
+        if (string.IsNullOrWhiteSpace(resetNewPassword))
+        {
+            resetMessage = "Please enter a new password.";
+            return;
+        }
+
+        if (resetNewPassword != resetConfirmPassword)
+        {
+            resetMessage = "Passwords do not match.";
+            return;
+        }
+
+        if (!System.Text.RegularExpressions.Regex.IsMatch(resetNewPassword, @"^(?=.*[a-zA-Z])(?=.*\d)(?=.*[\W_]).{4,}$"))
+        {
+            resetMessage = "Password must contain letters, numbers, and special characters.";
+            return;
+        }
+
+        try
+        {
+            var admin = await Task.Run(() => Database.GetAdminById(resetAdminId));
+            if (admin == null)
+            {
+                resetMessage = "Admin not found.";
+                return;
+            }
+
+            admin.Password = resetNewPassword;
+            await Task.Run(() => Database.UpdateAdmin(admin));
+
+            resetMessage = "Password reset successfully! You can now log in.";
+            resetSuccess = true;
+
+            await Task.Delay(2000);
+            CancelForgotPassword();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            resetMessage = "Error resetting password: " + ex.Message;
         }
     }
 

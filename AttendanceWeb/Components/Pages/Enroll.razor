@@ -43,7 +43,8 @@ else
             <div class="student-form">
                 <div class="form-group">
                     <label>Student ID *</label>
-                    <input type="text" @bind="newStudent.StudentId" placeholder="e.g., 2024-0001" class="form-control" />
+                    <input type="text" value="@newStudent.StudentId" @oninput="HandleStudentIdInput" 
+                           placeholder="YYYY-XXXX-L" maxlength="11" class="form-control" />
                 </div>
 
                 <div class="form-group">
@@ -500,7 +501,12 @@ else
 </style>
 
 @code {
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public int? Id { get; set; }
+
     private Student newStudent = new Student { YearLevel = 1 };
+    private int editingStudentId = 0;
     private List<FingerprintTemplate> capturedTemplates = new();
     private bool showEnrollmentForm = false;
     private bool isCapturing = false;
@@ -509,6 +515,41 @@ else
     private string errorMessage = "";
     private string captureMessage = "";
     private bool isFullscreen = false;
+
+    protected override void OnInitialized()
+    {
+        if (Id.HasValue && Id.Value > 0)
+        {
+            var student = Database.GetStudent(Id.Value);
+            if (student != null)
+            {
+                newStudent = student;
+                editingStudentId = student.Id;
+            }
+        }
+    }
+
+    private void HandleStudentIdInput(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString() ?? "";
+        // Remove non-alphanumeric
+        var clean = new string(val.Where(char.IsLetterOrDigit).ToArray()).ToUpper();
+        
+        var formatted = "";
+        if (clean.Length > 0)
+        {
+            formatted += clean.Substring(0, Math.Min(clean.Length, 4));
+            if (clean.Length > 4)
+            {
+                formatted += "-" + clean.Substring(4, Math.Min(clean.Length - 4, 4));
+                if (clean.Length > 8)
+                {
+                    formatted += "-" + clean.Substring(8, Math.Min(clean.Length - 8, 1));
+                }
+            }
+        }
+        newStudent.StudentId = formatted;
+    }
 
     private bool IsFormValid()
     {
@@ -527,11 +568,21 @@ else
         }
 
         // Check if student ID already exists
-        var existingStudents = Database.GetAllStudents();
-        if (existingStudents.Any(s => s.StudentId == newStudent.StudentId))
+        var existingStudent = Database.GetStudentByStudentId(newStudent.StudentId);
+        if (existingStudent != null)
         {
-            errorMessage = "Student ID already exists!";
-            return;
+            if (existingStudent.IsVerified)
+            {
+                errorMessage = "This student is already enrolled and verified. Use recapture from the admin dashboard to re-enroll fingerprints.";
+                return;
+            }
+
+            // Allow fingerprint enrollment for pre-registered (unverified) students
+            editingStudentId = existingStudent.Id;
+            newStudent.Name = existingStudent.Name;
+            newStudent.Program = existingStudent.Program;
+            newStudent.YearLevel = existingStudent.YearLevel;
+            newStudent.Section = existingStudent.Section;
         }
 
         errorMessage = "";
@@ -603,9 +654,20 @@ else
         {
             newStudent.EnrolledDate = DateTime.Now;
             newStudent.IsActive = true;
+            newStudent.IsVerified = true; // Mark as verified once fingerprints are captured
 
             // Save student
-            var studentId = await Task.Run(() => Database.AddStudent(newStudent));
+            int studentId;
+            if (editingStudentId > 0)
+            {
+                newStudent.Id = editingStudentId;
+                await Task.Run(() => Database.UpdateStudent(newStudent));
+                studentId = editingStudentId;
+            }
+            else
+            {
+                studentId = await Task.Run(() => Database.AddStudent(newStudent));
+            }
 
             // Save all fingerprint templates
             foreach (var template in capturedTemplates)
@@ -613,6 +675,8 @@ else
                 template.StudentId = studentId;
                 await Task.Run(() => Database.AddFingerprintTemplate(template));
             }
+            
+            Database.LogActivity(AuthService.AdminId, AuthService.AdminUsername, editingStudentId > 0 ? "Update" : "Create", "Student", $"{(editingStudentId > 0 ? "Updated" : "Enrolled")} student: {newStudent.Name} ({newStudent.StudentId})");
 
             captureMessage = "✓ Enrollment completed successfully!";
             await Task.Delay(1500);

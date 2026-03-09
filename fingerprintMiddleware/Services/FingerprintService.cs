@@ -115,36 +115,42 @@ namespace FingerprintMiddleware.Services
         [SupportedOSPlatform("windows")]
         public async Task<FingerprintResponse> CaptureFingerprint()
         {
-            // If not initialized, try to reinitialize once
+            // Lock the semaphore to ensure only one operation at a time
+            await _semaphore.WaitAsync();
+            
+            // Check initialization inside the lock to prevent multiple reinitializations
             if (!_isInitialized || _selectedReader == null)
             {
                 Console.WriteLine("[FingerprintService] Reader not initialized. Attempting reinitialization...");
+                // Release semaphore before reinitializing (ReinitializeReaderAsync acquires it)
+                _semaphore.Release();
                 await ReinitializeReaderAsync();
-            }
-
-            if (!_isInitialized || _selectedReader == null)
-            {
-                string deviceList = "(none)";
-                try
+                // Re-acquire the semaphore
+                await _semaphore.WaitAsync();
+                
+                // Check again after reinitialization
+                if (!_isInitialized || _selectedReader == null)
                 {
-                    var readers = ReaderCollection.GetReaders();
-                    if (readers != null && readers.Count > 0)
-                        deviceList = string.Join(", ", readers.Select(r => r.Description.Name));
+                    _semaphore.Release();
+                    string deviceList = "(none)";
+                    try
+                    {
+                        var readers = ReaderCollection.GetReaders();
+                        if (readers != null && readers.Count > 0)
+                            deviceList = string.Join(", ", readers.Select(r => r.Description.Name));
+                    }
+                    catch (Exception ex)
+                    {
+                        deviceList = $"Error listing devices: {ex.Message}";
+                    }
+                    return new FingerprintResponse
+                    {
+                        Success = false,
+                        Message = "Fingerprint reader not initialized after reattempt.",
+                        Error = $"No reader connected. Devices found: {deviceList}"
+                    };
                 }
-                catch (Exception ex)
-                {
-                    deviceList = $"Error listing devices: {ex.Message}";
-                }
-                return new FingerprintResponse
-                {
-                    Success = false,
-                    Message = "Fingerprint reader not initialized after reattempt.",
-                    Error = $"No reader connected. Devices found: {deviceList}"
-                };
             }
-
-            // Lock the semaphore to ensure only one operation at a time
-            await _semaphore.WaitAsync();
             try
             {
                 try
@@ -276,15 +282,24 @@ namespace FingerprintMiddleware.Services
                 {
                     if (captureResult?.Data?.Views?.Count > 0)
                     {
+                        var view = captureResult.Data.Views[0];
+                        if (view.RawImage == null || view.RawImage.Length == 0)
+                        {
+                            Console.WriteLine("[FingerprintService] RawImage is empty or null.");
+                            return string.Empty;
+                        }
+                        
                         // Convert captured fingerprint to bitmap
-                        var bitmap = new Bitmap(captureResult.Data.Views[0].Width, captureResult.Data.Views[0].Height);
+                        var bitmap = new Bitmap(view.Width, view.Height);
                         var bmpData = bitmap.LockBits(
                             new Rectangle(0, 0, bitmap.Width, bitmap.Height),
                             ImageLockMode.WriteOnly,
                             PixelFormat.Format8bppIndexed);
 
-                        // Copy fingerprint image data to bitmap
-                        System.Runtime.InteropServices.Marshal.Copy(captureResult.Data.Views[0].RawImage, 0, bmpData.Scan0, captureResult.Data.Views[0].RawImage.Length);
+                        // Calculate expected size and copy only what fits
+                        int expectedSize = bitmap.Width * bitmap.Height;
+                        int copySize = Math.Min(expectedSize, view.RawImage.Length);
+                        System.Runtime.InteropServices.Marshal.Copy(view.RawImage, 0, bmpData.Scan0, copySize);
                         bitmap.UnlockBits(bmpData);
 
                         // Set up the color palette for the 8bpp bitmap
@@ -315,34 +330,42 @@ namespace FingerprintMiddleware.Services
         [SupportedOSPlatform("windows")]
         public async Task<FingerprintResponse> VerifyFingerprint(string storedTemplateXml)
         {
+            // Lock the semaphore to ensure only one operation at a time
+            await _semaphore.WaitAsync();
+            
+            // Check initialization inside the lock to prevent multiple reinitializations
             if (!_isInitialized || _selectedReader == null)
             {
                 Console.WriteLine("[FingerprintService] Reader not initialized. Attempting reinitialization...");
+                // Release semaphore before reinitializing (ReinitializeReaderAsync acquires it)
+                _semaphore.Release();
                 await ReinitializeReaderAsync();
-            }
-            if (!_isInitialized || _selectedReader == null)
-            {
-                string deviceList = "(none)";
-                try
+                // Re-acquire the semaphore
+                await _semaphore.WaitAsync();
+                
+                // Check again after reinitialization
+                if (!_isInitialized || _selectedReader == null)
                 {
-                    var readers = ReaderCollection.GetReaders();
-                    if (readers != null && readers.Count > 0)
-                        deviceList = string.Join(", ", readers.Select(r => r.Description.Name));
+                    _semaphore.Release();
+                    string deviceList = "(none)";
+                    try
+                    {
+                        var readers = ReaderCollection.GetReaders();
+                        if (readers != null && readers.Count > 0)
+                            deviceList = string.Join(", ", readers.Select(r => r.Description.Name));
+                    }
+                    catch (Exception ex)
+                    {
+                        deviceList = $"Error listing devices: {ex.Message}";
+                    }
+                    return new FingerprintResponse
+                    {
+                        Success = false,
+                        Message = "Fingerprint reader not initialized after reattempt.",
+                        Error = $"No reader connected. Devices found: {deviceList}"
+                    };
                 }
-                catch (Exception ex)
-                {
-                    deviceList = $"Error listing devices: {ex.Message}";
-                }
-                return new FingerprintResponse
-                {
-                    Success = false,
-                    Message = "Fingerprint reader not initialized after reattempt.",
-                    Error = $"No reader connected. Devices found: {deviceList}"
-                };
             }
-
-            // Lock the semaphore to ensure only one operation at a time
-            await _semaphore.WaitAsync();
             try
             {
                 try
@@ -446,34 +469,42 @@ namespace FingerprintMiddleware.Services
         [SupportedOSPlatform("windows")]
         public async Task<FingerprintResponse> EnrollFingerprint(string userId)
         {
+            // Lock the semaphore to ensure only one operation at a time
+            await _semaphore.WaitAsync();
+            
+            // Check initialization inside the lock to prevent multiple reinitializations
             if (!_isInitialized || _selectedReader == null)
             {
                 Console.WriteLine("[FingerprintService] Reader not initialized. Attempting reinitialization...");
+                // Release semaphore before reinitializing (ReinitializeReaderAsync acquires it)
+                _semaphore.Release();
                 await ReinitializeReaderAsync();
-            }
-            if (!_isInitialized || _selectedReader == null)
-            {
-                string deviceList = "(none)";
-                try
+                // Re-acquire the semaphore
+                await _semaphore.WaitAsync();
+                
+                // Check again after reinitialization
+                if (!_isInitialized || _selectedReader == null)
                 {
-                    var readers = ReaderCollection.GetReaders();
-                    if (readers != null && readers.Count > 0)
-                        deviceList = string.Join(", ", readers.Select(r => r.Description.Name));
+                    _semaphore.Release();
+                    string deviceList = "(none)";
+                    try
+                    {
+                        var readers = ReaderCollection.GetReaders();
+                        if (readers != null && readers.Count > 0)
+                            deviceList = string.Join(", ", readers.Select(r => r.Description.Name));
+                    }
+                    catch (Exception ex)
+                    {
+                        deviceList = $"Error listing devices: {ex.Message}";
+                    }
+                    return new FingerprintResponse
+                    {
+                        Success = false,
+                        Message = "Fingerprint reader not initialized after reattempt.",
+                        Error = $"No reader connected. Devices found: {deviceList}"
+                    };
                 }
-                catch (Exception ex)
-                {
-                    deviceList = $"Error listing devices: {ex.Message}";
-                }
-                return new FingerprintResponse
-                {
-                    Success = false,
-                    Message = "Fingerprint reader not initialized after reattempt.",
-                    Error = $"No reader connected. Devices found: {deviceList}"
-                };
             }
-
-            // Lock the semaphore to ensure only one operation at a time
-            await _semaphore.WaitAsync();
             try
             {
                 // Capture fingerprint
@@ -583,6 +614,13 @@ namespace FingerprintMiddleware.Services
                 {
                     try
                     {
+                        // Check if another request already reinitialized successfully
+                        if (_isInitialized && _selectedReader != null)
+                        {
+                            Console.WriteLine("[FingerprintService] Reader already initialized by another request. Skipping.");
+                            return;
+                        }
+                        
                         Console.WriteLine("[FingerprintService] Reinitializing fingerprint reader (Safe Mode)...");
 
                         // Close existing reader if any

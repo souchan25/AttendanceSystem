@@ -2,6 +2,7 @@
 @using AttendanceWeb.Models
 @using AttendanceWeb.Services
 @inject AttendanceDatabase Database
+@inject StudentRecordsAccessService RecordsAccess
 @inject NavigationManager Navigation
 @layout AttendanceWeb.Components.Layout.StudentLayout
 @rendermode InteractiveServer
@@ -62,12 +63,31 @@
                 <div class="stat-label">Total Absences</div>
             </div>
 
-            <div class="stat-card sanctions">
+            <div class="stat-card sanctions @(sanctions.Any() ? "has-sanctions" : "")">
                 <div class="stat-icon">⚠️</div>
-                <div class="stat-value">@GetSanctionStatus()</div>
+                <div class="stat-value">@(sanctions.Count > 0 ? sanctions.Count.ToString() : "None")</div>
                 <div class="stat-label">Sanctions</div>
             </div>
         </div>
+
+        @if (sanctions.Any())
+        {
+            <div class="sanctions-list">
+                <h3>⚠️ Active Sanctions</h3>
+                <div class="sanctions-grid">
+                    @foreach (var s in sanctions)
+                    {
+                        <div class="sanction-item">
+                            <div class="sanction-meta">
+                                <strong>@s.Semester Semester</strong> — @s.AcademicYear
+                                <span class="absence-tag">@s.AbsenceCount absences</span>
+                            </div>
+                            <div class="sanction-desc">@s.SanctionDescription</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
 
         <div class="history-list">
             <h3>Attendance History</h3>
@@ -110,18 +130,31 @@
 </div>
 
 <style>
+    main,
+    article,
+    .content {
+        width: 100%;
+        max-width: none;
+    }
+
     .records-container {
-        padding: 20px;
-        max-width: 1000px;
-        margin: 0 auto;
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        padding: 24px 36px 40px;
+        height: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
+
     .records-header {
         display: flex;
         align-items: center;
-        margin-bottom: 30px;
-        gap: 20px;
+        margin-bottom: 24px;
+        gap: 16px;
     }
+
     .btn-back {
         background: none;
         border: 1px solid #ccc;
@@ -130,91 +163,190 @@
         cursor: pointer;
         font-size: 0.9rem;
     }
+
     .btn-back:hover {
         background: #f0f0f0;
     }
+
     .page-title {
         margin: 0;
-        font-size: 1.8rem;
+        font-size: 2rem;
         color: #333;
+    }
+
+    .student-info-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 28px;
+        box-shadow: 0 6px 25px rgba(102, 126, 234, 0.3);
+        border: none;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 16px;
+    }
+
+    .student-info-row {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+    }
+
+    .info-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.7px;
+        color: rgba(255, 255, 255, 0.8);
+        font-weight: 600;
+    }
+
+    .info-value {
+        font-size: 1.1rem;
+        color: #fff;
+        font-weight: 700;
+        overflow-wrap: anywhere;
     }
 
     .stats-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 20px;
-        margin-bottom: 40px;
+        margin-bottom: 32px;
     }
+
     .stat-card {
         background: white;
-        padding: 25px;
-        border-radius: 12px;
+        padding: 28px 20px;
+        border-radius: 16px;
         text-align: center;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        border: 1px solid #eee;
-        transition: transform 0.2s;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        border: 2px solid #eee;
+        transition: transform 0.2s, box-shadow 0.2s;
     }
+
     .stat-card:hover {
-        transform: translateY(-5px);
+        transform: translateY(-4px);
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
     }
+
     .stat-icon {
-        font-size: 2rem;
+        font-size: 2.5rem;
         margin-bottom: 10px;
     }
+
     .stat-value {
-        font-size: 2.5rem;
+        font-size: 3rem;
         font-weight: 800;
-        margin-bottom: 5px;
+        margin-bottom: 8px;
     }
+
     .stat-label {
         color: #666;
-        font-size: 0.9rem;
+        font-size: 0.95rem;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.7px;
+        font-weight: 600;
     }
+
     .stat-card.present .stat-value { color: #10b981; }
     .stat-card.absent .stat-value { color: #ef4444; }
-    .stat-card.sanctions .stat-value { color: #f59e0b; font-size: 1.5rem; }
+    .stat-card.sanctions .stat-value { color: #f59e0b; font-size: 2rem; }
+    .stat-card.has-sanctions { border-color: #f59e0b; background: #fffbef; }
+
+    .sanctions-list {
+        margin-bottom: 28px;
+    }
+
+    .sanctions-list h3 {
+        margin-bottom: 14px;
+        color: #b45309;
+    }
+
+    .sanctions-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .sanction-item {
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        padding: 14px 16px;
+        border-radius: 12px;
+    }
+
+    .sanction-meta {
+        font-size: 0.9rem;
+        color: #9a3412;
+        margin-bottom: 5px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .sanction-desc {
+        font-weight: 700;
+        color: #c2410c;
+        font-size: 1.05rem;
+    }
+
+    .absence-tag {
+        background: #ef4444;
+        color: white;
+        padding: 2px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
 
     .history-list h3 {
-        margin-bottom: 20px;
+        margin-bottom: 14px;
         color: #444;
         border-bottom: 2px solid #eee;
-        padding-bottom: 10px;
+        padding-bottom: 8px;
     }
+
     .table {
         width: 100%;
         border-collapse: collapse;
         background: white;
         border-radius: 8px;
         overflow: hidden;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
     }
+
     .table th {
         background: #f8f9fa;
         text-align: left;
-        padding: 15px;
-        font-weight: 600;
+        padding: 14px 16px;
+        font-weight: 700;
         color: #555;
+        font-size: 0.95rem;
     }
+
     .table td {
-        padding: 15px;
+        padding: 14px 16px;
         border-bottom: 1px solid #eee;
         color: #333;
+        font-size: 0.95rem;
     }
+
     .table tr:last-child td {
         border-bottom: none;
     }
+
     .status-badge {
         padding: 5px 10px;
         border-radius: 20px;
         font-size: 0.85rem;
         font-weight: 500;
     }
+
     .status-badge.present { background: #d1fae5; color: #065f46; }
     .status-badge.late { background: #fef3c7; color: #92400e; }
     .status-badge.absent { background: #fee2e2; color: #991b1b; }
-    
+
     .empty-msg {
         text-align: center;
         padding: 40px;
@@ -222,6 +354,7 @@
         background: #f9f9f9;
         border-radius: 8px;
     }
+
     .loading-state {
         text-align: center;
         padding: 50px;
@@ -229,36 +362,35 @@
         color: #666;
     }
 
-    .student-info-card {
-        background: white;
-        border-radius: 12px;
-        padding: 20px 25px;
-        margin-bottom: 25px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        border: 1px solid #eee;
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 12px;
+    @@media (max-width: 1200px) {
+        .student-info-card {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
     }
 
-    .student-info-row {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
+    @@media (max-width: 900px) {
+        .records-container {
+            padding: 20px;
+        }
+
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .student-info-card {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
     }
 
-    .info-label {
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: #888;
-        font-weight: 600;
-    }
+    @@media (max-width: 600px) {
+        .student-info-card {
+            grid-template-columns: 1fr;
+        }
 
-    .info-value {
-        font-size: 1rem;
-        color: #333;
-        font-weight: 600;
+        .records-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
     }
 </style>
 
@@ -269,24 +401,22 @@
     private Student? student;
     private (int Present, int Absent) stats;
     private List<AttendanceInfo> history = new();
+    private List<StudentSanctionInfo> sanctions = new();
 
     protected override async Task OnInitializedAsync()
     {
-        if (StudentId.HasValue)
+        if (!StudentId.HasValue || !RecordsAccess.HasAccess(StudentId.Value))
         {
-            student = await Task.Run(() => Database.GetStudent(StudentId.Value));
-            if (student != null)
-            {
-                stats = await Task.Run(() => Database.GetStudentAttendanceStats(student.Id));
-                history = await Task.Run(() => Database.GetStudentAttendanceHistory(student.Id));
-            }
+            Navigation.NavigateTo("/", true);
+            return;
         }
-    }
 
-    private string GetSanctionStatus()
-    {
-        if (stats.Absent >= 3) return "Review Required";
-        if (stats.Absent > 0) return "Warning";
-        return "None";
+        student = await Task.Run(() => Database.GetStudent(StudentId.Value));
+        if (student != null)
+        {
+            stats = await Task.Run(() => Database.GetStudentAttendanceStats(student.Id));
+            history = await Task.Run(() => Database.GetStudentAttendanceHistory(student.Id));
+            sanctions = await Task.Run(() => Database.GetStudentSanctions(student.Id));
+        }
     }
 }

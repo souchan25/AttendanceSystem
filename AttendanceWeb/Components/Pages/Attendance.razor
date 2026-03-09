@@ -4,6 +4,7 @@
 @using Microsoft.AspNetCore.Components
 @inject AttendanceDatabase Database
 @inject FingerprintApiClient ApiClient
+@inject StudentRecordsAccessService RecordsAccess
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 @layout AttendanceWeb.Components.Layout.StudentLayout
@@ -38,7 +39,7 @@
             </button>
             @if (identifiedStudent != null)
             {
-                <button class="btn btn-my-records" @onclick='() => Navigation.NavigateTo($"/myrecords/{identifiedStudent.Id}")'>
+                <button class="btn btn-my-records" @onclick="ViewMyRecords">
                     <span class="icon">📊</span> VIEW RECORDS
                 </button>
             }
@@ -83,11 +84,11 @@
 
         <!-- Action Buttons -->
         <div class="action-buttons">
-            <button class="btn-action btn-time-in" @onclick="HandleTimeIn" disabled="@isScanning">
+            <button class="btn-action btn-time-in" @onclick="HandleTimeIn" disabled="@(!CanUseTimeInButton)" title="@GetTimeInButtonHint()">
                 <span class="icon">↓</span>
                 <span class="label">TIME IN</span>
             </button>
-            <button class="btn-action btn-time-out" @onclick="HandleTimeOut" disabled="@isScanning">
+            <button class="btn-action btn-time-out" @onclick="HandleTimeOut" disabled="@(!CanUseTimeOutButton)" title="@GetTimeOutButtonHint()">
                 <span class="icon">↑</span>
                 <span class="label">TIME OUT</span>
             </button>
@@ -247,6 +248,7 @@
         margin: 0 auto;
         width: 100%;
         overflow-y: auto;
+        overflow-x: hidden;
     }
 
     .scan-area {
@@ -526,10 +528,11 @@
     private bool isScanning = false;
     private bool scannerConnected = false;
     private bool isTimeIn = true;
-    private bool showRecordsOption = false;
     private string lastTimestamp = "";
     private System.Threading.Timer? clockTimer;
-    private bool isFullscreen = false;
+
+    private bool CanUseTimeInButton => !isScanning && IsWithinWindow(currentEvent?.TimeInStart, currentEvent?.TimeInEnd);
+    private bool CanUseTimeOutButton => !isScanning && IsWithinWindow(currentEvent?.TimeOutStart, currentEvent?.TimeOutEnd);
 
     protected override async Task OnInitializedAsync()
     {
@@ -624,12 +627,100 @@
 
     private async Task HandleTimeIn()
     {
+        if (!CanUseTimeInButton) return;
         await PerformAttendanceCheck(true);
     }
 
     private async Task HandleTimeOut()
     {
+        if (!CanUseTimeOutButton) return;
         await PerformAttendanceCheck(false);
+    }
+
+    private bool IsWithinWindow(TimeOnly? startTime, TimeOnly? endTime)
+    {
+        if (currentEvent == null) return false;
+        
+        // If no time window is defined, allow access
+        if (!startTime.HasValue) return true;
+
+        var now = DateTime.Now;
+        var allowedStart = currentEvent.EventDate.Date.Add(startTime.Value.ToTimeSpan());
+        
+        // Check if we've reached the start time
+        if (now < allowedStart) return false;
+        
+        // If end time is defined, check if we're still within the window
+        if (endTime.HasValue)
+        {
+            var allowedEnd = currentEvent.EventDate.Date.Add(endTime.Value.ToTimeSpan());
+            if (now > allowedEnd) return false;
+        }
+        
+        return true;
+    }
+
+    private string GetTimeInButtonHint()
+    {
+        if (isScanning) return "Scanning in progress...";
+        if (currentEvent == null) return "No event selected";
+
+        if (currentEvent.TimeInStart.HasValue)
+        {
+            var now = DateTime.Now;
+            var allowedStart = currentEvent.EventDate.Date.Add(currentEvent.TimeInStart.Value.ToTimeSpan());
+            
+            if (now < allowedStart)
+            {
+                return $"Time In opens at {allowedStart:hh:mm tt}";
+            }
+            
+            if (currentEvent.TimeInEnd.HasValue)
+            {
+                var allowedEnd = currentEvent.EventDate.Date.Add(currentEvent.TimeInEnd.Value.ToTimeSpan());
+                if (now > allowedEnd)
+                {
+                    return $"Time In window closed at {allowedEnd:hh:mm tt}";
+                }
+            }
+        }
+
+        return "Ready for Time In";
+    }
+
+    private string GetTimeOutButtonHint()
+    {
+        if (isScanning) return "Scanning in progress...";
+        if (currentEvent == null) return "No event selected";
+
+        if (currentEvent.TimeOutStart.HasValue)
+        {
+            var now = DateTime.Now;
+            var allowedStart = currentEvent.EventDate.Date.Add(currentEvent.TimeOutStart.Value.ToTimeSpan());
+            
+            if (now < allowedStart)
+            {
+                return $"Time Out opens at {allowedStart:hh:mm tt}";
+            }
+            
+            if (currentEvent.TimeOutEnd.HasValue)
+            {
+                var allowedEnd = currentEvent.EventDate.Date.Add(currentEvent.TimeOutEnd.Value.ToTimeSpan());
+                if (now > allowedEnd)
+                {
+                    return $"Time Out window closed at {allowedEnd:hh:mm tt}";
+                }
+            }
+        }
+
+        return "Ready for Time Out";
+    }
+
+    private void ViewMyRecords()
+    {
+        if (identifiedStudent == null) return;
+        RecordsAccess.GrantAccess(identifiedStudent.Id);
+        Navigation.NavigateTo($"/myrecords/{identifiedStudent.Id}");
     }
 
     private async Task PerformAttendanceCheck(bool timeIn)
@@ -679,13 +770,11 @@
                 {
                     statusMessage = $"✅ TIME IN RECORDED";
                     statusHint = $"Welcome, {student.Name}! You can view your records.";
-                    showRecordsOption = true;
                 }
                 else
                 {
                     statusMessage = $"❌ TIME IN FAILED";
                     statusHint = result.Message;
-                    showRecordsOption = false;
                 }
             }
             else
@@ -695,13 +784,11 @@
                 {
                     statusMessage = $"✅ TIME OUT RECORDED";
                     statusHint = $"Goodbye, {student.Name}! You can view your records.";
-                    showRecordsOption = true;
                 }
                 else
                 {
                     statusMessage = $"❌ TIME OUT FAILED";
                     statusHint = result.Message;
-                    showRecordsOption = false;
                 }
             }
         }
@@ -715,13 +802,12 @@
             isScanning = false;
             StateHasChanged();
             
-            // Auto-clear after 8 seconds to give time to see records option
-            await Task.Delay(8000);
+            // Auto-clear after 15 seconds to give more time to see records option
+            await Task.Delay(15000);
             if (identifiedStudent != null)
             {
                 identifiedStudent = null;
                 fingerprintImage = "";
-                showRecordsOption = false;
                 statusMessage = "PLACE YOUR FINGER ON THE SCANNER";
                 statusHint = "Ready to scan fingerprint...";
                 StateHasChanged();
