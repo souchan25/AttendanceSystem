@@ -1222,8 +1222,9 @@ namespace AttendanceWeb.Services
                 {
                     foreach (var s in data.Students)
                     {
-                        var cmd = new SqliteCommand(@"INSERT INTO Students (StudentId, Name, Email, Program, YearLevel, EnrolledDate, IsActive, Section, IsVerified) 
-                                                     VALUES (@StudentId, @Name, @Email, @Program, @YearLevel, @EnrolledDate, @IsActive, @Section, @Verified)", conn, transaction);
+                        var cmd = new SqliteCommand(@"INSERT INTO Students (Id, StudentId, Name, Email, Program, YearLevel, EnrolledDate, IsActive, Section, IsVerified)
+                                                     VALUES (@Id, @StudentId, @Name, @Email, @Program, @YearLevel, @EnrolledDate, @IsActive, @Section, @Verified)", conn, transaction);
+                        cmd.Parameters.AddWithValue("@Id", s.Id);
                         cmd.Parameters.AddWithValue("@StudentId", s.StudentId);
                         cmd.Parameters.AddWithValue("@Name", s.Name);
                         cmd.Parameters.AddWithValue("@Email", s.Email ?? "");
@@ -1241,8 +1242,9 @@ namespace AttendanceWeb.Services
                 {
                     foreach (var e in data.Events)
                     {
-                        var cmd = new SqliteCommand(@"INSERT INTO Events (EventName, Description, EventDate, Period, AcademicYear, IsActive, TimeInStart, TimeInEnd, TimeOutStart, TimeOutEnd, IsDeleted, Semester)
-                                                     VALUES (@Name, @Desc, @Date, @Period, @Year, @Active, @TIS, @TIE, @TOS, @TOE, @Deleted, @Semester)", conn, transaction);
+                        var cmd = new SqliteCommand(@"INSERT INTO Events (Id, EventName, Description, EventDate, Period, AcademicYear, IsActive, TimeInStart, TimeInEnd, TimeOutStart, TimeOutEnd, IsDeleted, Semester)
+                                                     VALUES (@Id, @Name, @Desc, @Date, @Period, @Year, @Active, @TIS, @TIE, @TOS, @TOE, @Deleted, @Semester)", conn, transaction);
+                        cmd.Parameters.AddWithValue("@Id", e.Id);
                         cmd.Parameters.AddWithValue("@Name", e.EventName);
                         cmd.Parameters.AddWithValue("@Desc", e.Description ?? "");
                         cmd.Parameters.AddWithValue("@Date", e.EventDate.ToString("yyyy-MM-dd"));
@@ -1263,8 +1265,9 @@ namespace AttendanceWeb.Services
                 {
                     foreach (var a in data.Attendance)
                     {
-                        var cmd = new SqliteCommand(@"INSERT INTO AttendanceRecords (StudentId, EventId, TimeIn, TimeOut, Status, RecordDate, IsDeleted)
-                                                     VALUES (@Sid, @Eid, @Tin, @Tout, @Status, @Rdate, @Deleted)", conn, transaction);
+                        var cmd = new SqliteCommand(@"INSERT INTO AttendanceRecords (Id, StudentId, EventId, TimeIn, TimeOut, Status, RecordDate, IsDeleted)
+                                                     VALUES (@Id, @Sid, @Eid, @Tin, @Tout, @Status, @Rdate, @Deleted)", conn, transaction);
+                        cmd.Parameters.AddWithValue("@Id", a.Id);
                         cmd.Parameters.AddWithValue("@Sid", a.StudentId);
                         cmd.Parameters.AddWithValue("@Eid", a.EventId);
                         cmd.Parameters.AddWithValue("@Tin", a.TimeIn?.ToString("o") ?? (object)DBNull.Value);
