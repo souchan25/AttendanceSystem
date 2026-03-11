@@ -1015,21 +1015,22 @@ else
                                         <div class="db-icon" style="background: var(--primary-50); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">📥</div>
                                         <div class="db-info">
                                             <h4 style="margin: 0 0 8px 0;">Export Database</h4>
-                                            <p style="margin-bottom: 16px;">Download a backup of the current database (JSON format).</p>
-                                            <button class="btn btn-secondary" @onclick="ExportDatabase" style="width: 100%;">Export JSON</button>
+                                            <p style="margin-bottom: 16px;">Download a backup of the current database (Excel format).</p>
+                                            <button class="btn btn-secondary" @onclick="ExportDatabase" style="width: 100%;">Export Excel</button>
                                         </div>
                                     </div>
                                     <div class="db-action-card" style="flex-direction: column; align-items: flex-start; gap: 12px;">
                                         <div class="db-icon" style="background: var(--success-50); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">📤</div>
                                         <div class="db-info">
                                             <h4 style="margin: 0 0 8px 0;">Import Database</h4>
-                                            <p style="margin-bottom: 16px;">Restore database from a previously exported JSON backup file.</p>
+                                            <p style="margin-bottom: 16px;">Restore database from a previously exported Excel backup file.</p>
                                             <div class="import-wrapper" style="position: relative; width: 100%;">
-                                                <InputFile OnChange="HandleImport" id="db-import" style="display: none;" accept=".json" />
+                                                <InputFile OnChange="HandleImport" id="db-import" style="display: none;" accept=".xlsx" />
                                                 <label for="db-import" class="btn btn-primary" style="width: 100%; text-align: center; cursor: pointer; display: block; padding: 12px;">
-                                                    Import JSON
+                                                    Import Excel
                                                 </label>
                                             </div>
+                                            <button class="btn btn-secondary btn-sm" @onclick="() => ShowFormatVisualizer(true)" style="margin-top: 8px; width: 100%;">View Format</button>
                                         </div>
                                     </div>
                                     <div class="db-action-card" style="flex-direction: column; align-items: flex-start; gap: 12px;">
@@ -1043,6 +1044,7 @@ else
                                                     Import PDF
                                                 </label>
                                             </div>
+                                            <button class="btn btn-secondary btn-sm" @onclick="() => ShowFormatVisualizer(false)" style="margin-top: 8px; width: 100%;">View Format</button>
                                             @if (!string.IsNullOrEmpty(pdfImportMessage))
                                             {
                                                 <div class="alert @(pdfImportSuccess ? "alert-success" : "alert-error")" style="margin-top: 12px;">
@@ -1131,6 +1133,75 @@ else
         }
     </div>
 </div>
+
+@if (showFormatVisualizer)
+{
+    <div class="modal-overlay" @onclick="CloseFormatVisualizer"></div>
+    <div class="modal-card" style="max-width: 800px; z-index: 1001; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0;">@(isExcelFormat ? "Excel Database Import Format" : "PDF Student Import Format")</h3>
+            <button class="btn-close" @onclick="CloseFormatVisualizer" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+        </div>
+        <div class="modal-body">
+            @if (isExcelFormat)
+            {
+                <p>The Excel file must contain four sheets: <strong>Students</strong>, <strong>Events</strong>, <strong>Attendance</strong>, and <strong>Logs</strong>. The first row of each sheet must be the headers.</p>
+                <p><strong>Students Sheet Columns:</strong></p>
+                <div style="overflow-x: auto;">
+                    <table class="table" style="font-size: 0.9em; min-width: 600px;">
+                        <thead>
+                            <tr style="background: var(--neutral-50);">
+                                <th style="padding: 8px;">Id</th>
+                                <th style="padding: 8px;">StudentId</th>
+                                <th style="padding: 8px;">Name</th>
+                                <th style="padding: 8px;">Email</th>
+                                <th style="padding: 8px;">Program</th>
+                                <th style="padding: 8px;">YearLevel</th>
+                                <th style="padding: 8px;">EnrolledDate</th>
+                                <th style="padding: 8px;">IsActive</th>
+                                <th style="padding: 8px;">Section</th>
+                                <th style="padding: 8px;">IsVerified</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="padding: 8px; border-top: 1px solid var(--neutral-200);">1</td>
+                                <td style="padding: 8px; border-top: 1px solid var(--neutral-200);">2023-001</td>
+                                <td style="padding: 8px; border-top: 1px solid var(--neutral-200);">John Doe</td>
+                                <td style="padding: 8px; border-top: 1px solid var(--neutral-200);">john@example.com</td>
+                                <td style="padding: 8px; border-top: 1px solid var(--neutral-200);">BSIT</td>
+                                <td style="padding: 8px; border-top: 1px solid var(--neutral-200);">1</td>
+                                <td style="padding: 8px; border-top: 1px solid var(--neutral-200);">2023-08-01</td>
+                                <td style="padding: 8px; border-top: 1px solid var(--neutral-200);">TRUE</td>
+                                <td style="padding: 8px; border-top: 1px solid var(--neutral-200);">A</td>
+                                <td style="padding: 8px; border-top: 1px solid var(--neutral-200);">FALSE</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="text-muted" style="font-size: 0.8em; margin-top: 16px; color: var(--neutral-500);">Note: You can generate a template by exporting the current database.</p>
+            }
+            else
+            {
+                <p>The PDF file should be a list of students containing their ID, Name, Program, and Year Level. The importer looks for lines that start with a student ID pattern (e.g., Year-Number or letters followed by numbers).</p>
+                <div style="background: var(--neutral-50); padding: 16px; border-radius: 8px; border: 1px dashed var(--neutral-300); font-family: monospace;">
+                    <p style="margin: 0; color: var(--neutral-500);">Example PDF Content:</p>
+                    <br/>
+                    <p style="margin: 0;">Student List - BSIT 2023</p>
+                    <p style="margin: 0;">-----------------------</p>
+                    <p style="margin: 0; font-weight: bold; color: var(--neutral-900);">2023-0001 Smith, John A. BSIT 1</p>
+                    <p style="margin: 0; font-weight: bold; color: var(--neutral-900);">2023-0002 Doe, Jane B. BSCS 2</p>
+                    <p style="margin: 0; font-weight: bold; color: var(--neutral-900);">2023-0003 Johnson, Bob C. BSIS 3</p>
+                    <br/>
+                    <p style="margin: 0; color: var(--neutral-500);">The importer will extract the ID, name, program, and year level from lines matching this pattern.</p>
+                </div>
+            }
+        </div>
+        <div class="modal-footer" style="margin-top: 24px; text-align: right;">
+            <button class="btn btn-primary" @onclick="CloseFormatVisualizer">Close</button>
+        </div>
+    </div>
+}
 
 @if (showConfirmationModal)
 {
@@ -2879,6 +2950,20 @@ else
     private Event? pendingDeleteEvent = null;
     private Student? pendingDeleteStudent = null;
 
+    private bool showFormatVisualizer = false;
+    private bool isExcelFormat = true; // true = Excel, false = PDF
+
+    private void ShowFormatVisualizer(bool isExcel)
+    {
+        isExcelFormat = isExcel;
+        showFormatVisualizer = true;
+    }
+
+    private void CloseFormatVisualizer()
+    {
+        showFormatVisualizer = false;
+    }
+
     private async Task Logout()
     {
         AuthService.Logout();
@@ -2970,17 +3055,17 @@ else
     {
         try
         {
-            var data = new {
+            var data = new AttendanceWeb.Services.AttendanceDatabase.DatabaseBackup {
                 Students = Database.GetAllStudents(),
                 Events = Database.GetEvents(true),
                 Attendance = Database.GetAllAttendanceRecords(),
                 Logs = Database.GetActivityLogs()
             };
-            var json = System.Text.Json.JsonSerializer.Serialize(data, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-            var bytes = System.Text.Encoding.UTF8.GetBytes(json);
-            var base64 = Convert.ToBase64String(bytes);
-            await JSRuntime.InvokeVoidAsync("downloadFile", $"AttendanceBackup_{DateTime.Now:yyyyMMdd}.json", "application/json", base64);
-            Database.LogActivity(AuthService.AdminId, AuthService.AdminUsername, "Export", "Database", "Exported database JSON backup.");
+            var excelService = new AttendanceWeb.Services.ExcelImportExportService();
+            var excelBytes = excelService.ExportDatabaseToExcel(data);
+            var base64 = Convert.ToBase64String(excelBytes);
+            await JSRuntime.InvokeVoidAsync("downloadFile", $"AttendanceBackup_{DateTime.Now:yyyyMMdd}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", base64);
+            Database.LogActivity(AuthService.AdminId, AuthService.AdminUsername, "Export", "Database", "Exported database Excel backup.");
             await LoadActivityLogs();
         }
         catch (Exception ex)
@@ -2996,13 +3081,20 @@ else
 
         try
         {
-            using var stream = file.OpenReadStream();
-            using var reader = new System.IO.StreamReader(stream);
-            var json = await reader.ReadToEndAsync();
+            // Allow up to 10 MB for the Excel file
+            using var stream = file.OpenReadStream(10 * 1024 * 1024);
+            using var memoryStream = new System.IO.MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            memoryStream.Position = 0;
 
             if (!await JSRuntime.InvokeAsync<bool>("confirm", "This will COMPLETELY OVERWRITE current students, events, and records. PROCEED?")) return;
 
+            var excelService = new AttendanceWeb.Services.ExcelImportExportService();
+            var backupData = excelService.ImportDatabaseFromExcel(memoryStream);
+
+            var json = System.Text.Json.JsonSerializer.Serialize(backupData);
             await Task.Run(() => Database.ImportDatabaseFromJson(json, AuthService.AdminId, AuthService.AdminUsername));
+
             await LoadData();
             await LoadActivityLogs();
             await JSRuntime.InvokeVoidAsync("alert", "Database imported successfully!");
