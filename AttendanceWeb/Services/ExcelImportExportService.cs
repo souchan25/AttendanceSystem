@@ -88,6 +88,8 @@ namespace AttendanceWeb.Services
                 wsAttendance.Cell(1, 4).Value = "TimeIn";
                 wsAttendance.Cell(1, 5).Value = "TimeOut";
                 wsAttendance.Cell(1, 6).Value = "Status";
+                wsAttendance.Cell(1, 7).Value = "RecordDate";
+                wsAttendance.Cell(1, 8).Value = "IsDeleted";
 
                 for (int i = 0; i < data.Attendance.Count; i++)
                 {
@@ -98,6 +100,8 @@ namespace AttendanceWeb.Services
                     wsAttendance.Cell(i + 2, 4).Value = att.TimeIn?.ToString("o");
                     wsAttendance.Cell(i + 2, 5).Value = att.TimeOut?.ToString("o");
                     wsAttendance.Cell(i + 2, 6).Value = att.Status;
+                    wsAttendance.Cell(i + 2, 7).Value = att.RecordDate.ToString("yyyy-MM-dd");
+                    wsAttendance.Cell(i + 2, 8).Value = att.IsDeleted;
                 }
             }
 
@@ -150,16 +154,16 @@ namespace AttendanceWeb.Services
                 {
                     data.Students.Add(new Student
                     {
-                        Id = row.Cell(1).GetValue<int>(),
+                        Id = SafeGetInt(row.Cell(1)),
                         StudentId = row.Cell(2).GetString(),
                         Name = row.Cell(3).GetString(),
                         Email = row.Cell(4).GetString(),
                         Program = row.Cell(5).GetString(),
-                        YearLevel = row.Cell(6).GetValue<int>(),
-                        EnrolledDate = row.Cell(7).GetDateTime(),
-                        IsActive = row.Cell(8).GetValue<bool>(),
+                        YearLevel = SafeGetInt(row.Cell(6)),
+                        EnrolledDate = SafeGetDateTime(row.Cell(7)),
+                        IsActive = SafeGetBool(row.Cell(8)),
                         Section = row.Cell(9).GetString(),
-                        IsVerified = row.Cell(10).GetValue<bool>()
+                        IsVerified = SafeGetBool(row.Cell(10))
                     });
                 }
             }
@@ -171,15 +175,15 @@ namespace AttendanceWeb.Services
                 {
                     data.Events.Add(new Event
                     {
-                        Id = row.Cell(1).GetValue<int>(),
+                        Id = SafeGetInt(row.Cell(1)),
                         EventName = row.Cell(2).GetString(),
-                        EventDate = row.Cell(3).GetDateTime(),
+                        EventDate = SafeGetDateTime(row.Cell(3)),
                         Description = row.Cell(4).GetString(),
-                        IsActive = row.Cell(5).GetValue<bool>(),
-                        TimeInStart = string.IsNullOrEmpty(row.Cell(6).GetString()) ? null : TimeOnly.Parse(row.Cell(6).GetString()),
-                        TimeInEnd = string.IsNullOrEmpty(row.Cell(7).GetString()) ? null : TimeOnly.Parse(row.Cell(7).GetString()),
-                        TimeOutStart = string.IsNullOrEmpty(row.Cell(8).GetString()) ? null : TimeOnly.Parse(row.Cell(8).GetString()),
-                        TimeOutEnd = string.IsNullOrEmpty(row.Cell(9).GetString()) ? null : TimeOnly.Parse(row.Cell(9).GetString()),
+                        IsActive = SafeGetBool(row.Cell(5)),
+                        TimeInStart = SafeGetTimeOnly(row.Cell(6)),
+                        TimeInEnd = SafeGetTimeOnly(row.Cell(7)),
+                        TimeOutStart = SafeGetTimeOnly(row.Cell(8)),
+                        TimeOutEnd = SafeGetTimeOnly(row.Cell(9)),
                         Semester = row.Cell(10).GetString(),
                         AcademicYear = row.Cell(11).GetString()
                     });
@@ -193,12 +197,14 @@ namespace AttendanceWeb.Services
                 {
                     data.Attendance.Add(new AttendanceRecord
                     {
-                        Id = row.Cell(1).GetValue<int>(),
-                        EventId = row.Cell(2).GetValue<int>(),
-                        StudentId = row.Cell(3).GetValue<int>(),
-                        TimeIn = string.IsNullOrEmpty(row.Cell(4).GetString()) ? null : DateTime.Parse(row.Cell(4).GetString()),
-                        TimeOut = string.IsNullOrEmpty(row.Cell(5).GetString()) ? null : DateTime.Parse(row.Cell(5).GetString()),
-                        Status = row.Cell(6).GetString()
+                        Id = SafeGetInt(row.Cell(1)),
+                        EventId = SafeGetInt(row.Cell(2)),
+                        StudentId = SafeGetInt(row.Cell(3)),
+                        TimeIn = SafeGetNullableDateTime(row.Cell(4)),
+                        TimeOut = SafeGetNullableDateTime(row.Cell(5)),
+                        Status = row.Cell(6).GetString(),
+                        RecordDate = SafeGetDateTime(row.Cell(7)),
+                        IsDeleted = SafeGetBool(row.Cell(8))
                     });
                 }
             }
@@ -210,18 +216,82 @@ namespace AttendanceWeb.Services
                 {
                     data.Logs.Add(new ActivityLog
                     {
-                        Id = row.Cell(1).GetValue<int>(),
-                        AdminId = string.IsNullOrEmpty(row.Cell(2).GetString()) ? null : row.Cell(2).GetValue<int>(),
+                        Id = SafeGetInt(row.Cell(1)),
+                        AdminId = SafeGetNullableInt(row.Cell(2)),
                         AdminUsername = row.Cell(3).GetString(),
                         Action = row.Cell(4).GetString(),
                         Target = row.Cell(5).GetString(),
                         Details = row.Cell(6).GetString(),
-                        Timestamp = row.Cell(7).GetDateTime()
+                        Timestamp = SafeGetDateTime(row.Cell(7))
                     });
                 }
             }
 
             return data;
+        }
+
+        private int SafeGetInt(IXLCell cell)
+        {
+            if (cell.IsEmpty()) return 0;
+            if (cell.DataType == XLDataType.Number) return (int)cell.GetDouble();
+            if (int.TryParse(cell.GetString(), out int val)) return val;
+            return 0;
+        }
+
+        private int? SafeGetNullableInt(IXLCell cell)
+        {
+            if (cell.IsEmpty()) return null;
+            if (cell.DataType == XLDataType.Number) return (int)cell.GetDouble();
+            if (int.TryParse(cell.GetString(), out int val)) return val;
+            return null;
+        }
+
+        private bool SafeGetBool(IXLCell cell)
+        {
+            if (cell.IsEmpty()) return false;
+            if (cell.DataType == XLDataType.Boolean) return cell.GetBoolean();
+            if (cell.DataType == XLDataType.Number) return cell.GetDouble() != 0;
+            var str = cell.GetString().ToLower();
+            return str == "true" || str == "1" || str == "yes";
+        }
+
+        private DateTime SafeGetDateTime(IXLCell cell)
+        {
+            if (cell.IsEmpty()) return DateTime.MinValue;
+            try
+            {
+                if (cell.DataType == XLDataType.DateTime) return cell.GetDateTime();
+                if (DateTime.TryParse(cell.GetString(), out DateTime dt)) return dt;
+            }
+            catch { }
+            return DateTime.MinValue;
+        }
+
+        private DateTime? SafeGetNullableDateTime(IXLCell cell)
+        {
+            if (cell.IsEmpty()) return null;
+            try
+            {
+                if (cell.DataType == XLDataType.DateTime) return cell.GetDateTime();
+                if (DateTime.TryParse(cell.GetString(), out DateTime dt)) return dt;
+            }
+            catch { }
+            return null;
+        }
+
+        private TimeOnly? SafeGetTimeOnly(IXLCell cell)
+        {
+            if (cell.IsEmpty()) return null;
+            var str = cell.GetString();
+            if (string.IsNullOrEmpty(str)) return null;
+            
+            // Handle ClosedXML/Excel weirdness with time values formatted as strings
+            if (TimeOnly.TryParse(str, out TimeOnly result)) return result;
+            
+            // Handle potential DateTime strings
+            if (DateTime.TryParse(str, out DateTime dt)) return TimeOnly.FromDateTime(dt);
+
+            return null;
         }
     }
 }

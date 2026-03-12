@@ -19,7 +19,10 @@
             <button class="btn btn-back" @onclick='() => Navigation.NavigateTo("/")'>
                 ← Back to Events
             </button>
-            <h1 class="title">🎓 ATTENDANCE PORTAL</h1>
+            <h1 class="title">
+                <img src="images/logo.png" alt="Logo" style="height: 40px; vertical-align: middle; margin-right: 12px;" />
+                INFOTECH ATTENDANCE PORTAL
+            </h1>
             <p class="subtitle">
                 @currentEvent?.EventName (@currentEvent?.Period - @currentEvent?.AcademicYear)
                 @if (currentEvent != null)
